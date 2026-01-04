@@ -145,17 +145,8 @@
         };
 
         const MergeGame = () => {
-          // ALL HOOKS MUST BE AT THE TOP (React Rules of Hooks)
           // Load categories from external file
           const [CATEGORIES, setCATEGORIES] = React.useState(null);
-          const [items, setItems] = useState([]);
-          const [selected, setSelected] = useState([]);
-          const [won, setWon] = useState(false);
-          const [failedMerge, setFailedMerge] = useState(false);
-          const [mergeAnimation, setMergeAnimation] = useState(null);
-          const [isDailyPuzzle, setIsDailyPuzzle] = useState(true);
-          const [randomPuzzleSize, setRandomPuzzleSize] = useState(45); // For random puzzles only
-          const [currentPuzzleSize, setCurrentPuzzleSize] = useState(45); // Track active puzzle size
           
           React.useEffect(() => {
             fetch('categories.json')
@@ -164,12 +155,21 @@
               .catch(error => console.error('Error loading categories:', error));
           }, []);
           
-          // Wait for categories to load (AFTER all hooks are declared)
+          // Wait for categories to load
           if (!CATEGORIES) {
             return <div className="flex items-center justify-center min-h-screen">
               <div className="text-xl">Loading categories...</div>
             </div>;
           }
+          
+          const [items, setItems] = useState([]);
+          const [selected, setSelected] = useState([]);
+          const [won, setWon] = useState(false);
+          const [failedMerge, setFailedMerge] = useState(false);
+          const [mergeAnimation, setMergeAnimation] = useState(null);
+          const [isDailyPuzzle, setIsDailyPuzzle] = useState(true);
+          const [randomPuzzleSize, setRandomPuzzleSize] = useState(45); // For random puzzles only
+          const [currentPuzzleSize, setCurrentPuzzleSize] = useState(45); // Track active puzzle size
           
           // localStorage utilities (better than cookies for this use case)
           const saveGameState = (state) => {
