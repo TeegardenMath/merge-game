@@ -1168,7 +1168,59 @@
           const [selected, setSelected] = useState([]);
           const [won, setWon] = useState(false);
           const [failedMerge, setFailedMerge] = useState(false);
-          const [mergeAnimation, setMergeAnimation] = useState(null); // { itemId, category, position }
+          const [mergeAnimation, setMergeAnimation] = useState(null);
+          const [isDailyPuzzle, setIsDailyPuzzle] = useState(true);
+          const [randomPuzzleSize, setRandomPuzzleSize] = useState(45); // For random puzzles only
+          const [currentPuzzleSize, setCurrentPuzzleSize] = useState(45); // Track active puzzle size
+          
+          // localStorage utilities (better than cookies for this use case)
+          const saveGameState = (state) => {
+            try {
+              localStorage.setItem('mergeGameState', JSON.stringify(state));
+            } catch (e) {
+              console.error('Failed to save game state:', e);
+            }
+          };
+          
+          const loadGameState = () => {
+            try {
+              const saved = localStorage.getItem('mergeGameState');
+              return saved ? JSON.parse(saved) : null;
+            } catch (e) {
+              console.error('Failed to load game state:', e);
+              return null;
+            }
+          };
+          
+          const clearGameState = () => {
+            try {
+              localStorage.removeItem('mergeGameState');
+            } catch (e) {
+              console.error('Failed to clear game state:', e);
+            }
+          };
+          
+          // Get today's date string for daily puzzle
+          const getTodayString = () => {
+            const today = new Date();
+            return `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+          };
+          
+          // Seeded random number generator for consistent daily puzzles
+          const seededRandom = (seed) => {
+            let x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+          };
+          
+          const createSeededShuffle = (array, seed) => {
+            const arr = [...array];
+            let currentSeed = seed;
+            for (let i = arr.length - 1; i > 0; i--) {
+              const j = Math.floor(seededRandom(currentSeed++) * (i + 1));
+              [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+          };
 
           // Color utilities
           const hslToRgb = (h, s, l) => {
@@ -1266,14 +1318,79 @@
               alert(`Game cannot start: ${invalidCategories.length} categories have < 45 items. Check console for details.`);
             }
           }, []);
-
-          const initializeGame = () => {
-            const categoryNames = Object.keys(CATEGORIES);
-            const TARGET_CATEGORIES = 45;
-            const ITEMS_PER_CATEGORY = 45;
-            const TARGET_TOTAL_ITEMS = TARGET_CATEGORIES * ITEMS_PER_CATEGORY; // 2025
+          
+          // Load game state on mount
+          useEffect(() => {
+            const savedState = loadGameState();
+            const todayString = getTodayString();
             
-            console.log(`\n=== INITIALIZING GAME ===`);
+            console.log('=== LOADING GAME STATE ===');
+            console.log('Today:', todayString);
+            console.log('Saved state:', savedState);
+            
+            if (savedState) {
+              // Check if it's a daily puzzle and if it's still today's puzzle
+              if (savedState.isDailyPuzzle && savedState.dailyDate !== todayString) {
+                // Saved daily puzzle is from a different day - start fresh daily puzzle
+                console.log('Saved daily puzzle is old, starting new daily puzzle...');
+                clearGameState();
+                initializeGame(true);
+              } else {
+                // Restore saved state (either same-day daily puzzle or random puzzle)
+                console.log('Restoring saved game state...');
+                console.log('  - isDailyPuzzle:', savedState.isDailyPuzzle);
+                console.log('  - currentPuzzleSize:', savedState.currentPuzzleSize);
+                setItems(savedState.items || []);
+                setWon(savedState.won || false);
+                setIsDailyPuzzle(savedState.isDailyPuzzle);
+                setCurrentPuzzleSize(savedState.currentPuzzleSize || 45);
+                setRandomPuzzleSize(savedState.randomPuzzleSize || 45);
+              }
+            } else {
+              // No saved state - start new daily puzzle
+              console.log('No saved state, starting new daily puzzle...');
+              initializeGame(true);
+            }
+          }, []);
+          
+          // Save game state whenever anything changes
+          useEffect(() => {
+            if (items.length > 0) {
+              const gameState = {
+                items: items,
+                won: won,
+                isDailyPuzzle: isDailyPuzzle,
+                currentPuzzleSize: currentPuzzleSize,
+                randomPuzzleSize: randomPuzzleSize,
+                dailyDate: isDailyPuzzle ? getTodayString() : null,
+                lastUpdated: new Date().toISOString()
+              };
+              saveGameState(gameState);
+            }
+          }, [items, won, isDailyPuzzle, currentPuzzleSize, randomPuzzleSize]);
+
+          const initializeGame = (isDaily = false, customSize = null) => {
+            const categoryNames = Object.keys(CATEGORIES);
+            
+            // Determine puzzle size
+            const TARGET_CATEGORIES = isDaily ? 45 : (customSize || randomPuzzleSize);
+            const ITEMS_PER_CATEGORY = isDaily ? 45 : (customSize || randomPuzzleSize);
+            const TARGET_TOTAL_ITEMS = TARGET_CATEGORIES * ITEMS_PER_CATEGORY;
+            
+            // Set mode and current size
+            setIsDailyPuzzle(isDaily);
+            setCurrentPuzzleSize(TARGET_CATEGORIES);
+            
+            // Get seed for daily puzzle (hash of today's date)
+            let seed = Math.random();
+            if (isDaily) {
+              const todayString = getTodayString();
+              seed = todayString.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+              console.log(`Daily puzzle seed: ${seed} (${todayString})`);
+            }
+            
+            console.log(`\n=== INITIALIZING ${isDaily ? 'DAILY' : 'RANDOM'} GAME ===`);
+            console.log(`Size: ${TARGET_CATEGORIES} categories × ${ITEMS_PER_CATEGORY} items = ${TARGET_TOTAL_ITEMS} total`);
             console.log(`Total available categories: ${categoryNames.length}`);
             
             // Retry logic - keep trying until we get exactly 2025 items
@@ -1285,8 +1402,10 @@
               attempts++;
               console.log(`\n--- Attempt ${attempts} ---`);
               
-              // Shuffle categories
-              const shuffledCategories = [...categoryNames].sort(() => Math.random() - 0.5);
+              // Shuffle categories (seeded for daily puzzle)
+              const shuffledCategories = isDaily 
+                ? createSeededShuffle(categoryNames, seed + attempts)
+                : [...categoryNames].sort(() => Math.random() - 0.5);
               
               // Select categories while respecting mutual exclusions
               const selectedCategories = [];
@@ -1296,8 +1415,9 @@
                 if (selectedCategories.length >= TARGET_CATEGORIES) break;
                 
                 // Check if this category has enough items (need buffer for duplicates)
-                if (!CATEGORIES[category] || CATEGORIES[category].length < 50) {
-                  console.warn(`Category "${category}" skipped - only has ${CATEGORIES[category]?.length || 0} items`);
+                // For smaller puzzles, we can be more lenient with the buffer
+                const minRequired = Math.max(ITEMS_PER_CATEGORY, 50);
+                if (!CATEGORIES[category] || CATEGORIES[category].length < minRequired) {
                   continue;
                 }
                 
@@ -1338,7 +1458,11 @@
               
               sortedBySize.forEach(category => {
                 const categoryItems = CATEGORIES[category];
-                const shuffled = [...categoryItems].sort(() => Math.random() - 0.5);
+                
+                // Shuffle items (seeded for daily puzzle)
+                const shuffled = isDaily
+                  ? createSeededShuffle(categoryItems, seed + category.charCodeAt(0))
+                  : [...categoryItems].sort(() => Math.random() - 0.5);
                 
                 // Select items, skipping any that have already been used
                 const selected = [];
@@ -1370,7 +1494,10 @@
               // Check if we hit the target
               if (allItems.length === TARGET_TOTAL_ITEMS) {
                 console.log(`\n✅ SUCCESS! Got exactly ${TARGET_TOTAL_ITEMS} items on attempt ${attempts}`);
-                finalItems = allItems;
+                // Shuffle the final items array (seeded for daily puzzle)
+                finalItems = isDaily
+                  ? createSeededShuffle(allItems, seed + 999999)
+                  : allItems.sort(() => Math.random() - 0.5);
                 break;
               } else {
                 console.warn(`Attempt ${attempts}: Got ${allItems.length} items, need ${TARGET_TOTAL_ITEMS}. Retrying...`);
@@ -1389,15 +1516,16 @@
               console.error(`The game will proceed but may not have exactly 2025 items.`);
             }
             
-            const shuffledItems = (finalItems.length > 0 ? finalItems : []).sort(() => Math.random() - 0.5);
+            // Final shuffle (seeded for daily puzzle)
+            const shuffledItems = isDaily
+              ? createSeededShuffle(finalItems, seed + 888888)
+              : finalItems.sort(() => Math.random() - 0.5);
+            
             setItems(shuffledItems);
             setSelected([]);
             setWon(false);
+            // State will be saved automatically by the useEffect
           };
-
-          useEffect(() => {
-            initializeGame();
-          }, []);
 
           const toggleSelect = (id) => {
             if (selected.includes(id)) {
@@ -1496,7 +1624,7 @@
                 }
               }, 0);
               
-              if (newItems.every(item => item.items.length === 45)) {
+              if (newItems.every(item => item.items.length === currentPuzzleSize)) {
                 setWon(true);
               }
             } else {
@@ -1514,15 +1642,51 @@
               <div className="max-w-7xl mx-auto">
                 <div className="text-center mb-8">
                   <h1 className="text-4xl font-bold text-gray-800 mb-2">Merge Game</h1>
-                  <p className="text-gray-600 mb-4">
-                    Select two items from the same category to merge them. Win by creating piles of 45!
+                  <p className="text-gray-600 mb-2">
+                    Select two items from the same category to merge them. Win by creating piles of {currentPuzzleSize}!
                   </p>
+                  {isDailyPuzzle && (
+                    <p className="text-sm text-indigo-600 font-medium mb-4">
+                      📅 Playing today's daily puzzle (45×45 = 2025 items)
+                    </p>
+                  )}
+                  {!isDailyPuzzle && (
+                    <div className="mb-4">
+                      <p className="text-sm text-green-600 font-medium mb-2">
+                        🎲 Random puzzle ({randomPuzzleSize}×{randomPuzzleSize} = {randomPuzzleSize * randomPuzzleSize} items)
+                      </p>
+                      <div className="flex items-center gap-3 justify-center">
+                        <label className="text-sm text-gray-600">Size:</label>
+                        <input 
+                          type="range" 
+                          min="10" 
+                          max="45" 
+                          value={randomPuzzleSize}
+                          onChange={(e) => setRandomPuzzleSize(parseInt(e.target.value))}
+                          className="w-48"
+                        />
+                        <span className="text-sm font-medium text-gray-700 w-16">{randomPuzzleSize}×{randomPuzzleSize}</span>
+                        <button
+                          onClick={() => initializeGame(false, randomPuzzleSize)}
+                          className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
+                        >
+                          Apply Size
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex gap-3 justify-center">
                     <button
-                      onClick={initializeGame}
+                      onClick={() => initializeGame(true)}
                       className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
                     >
-                      🔄 New Game
+                      📅 {isDailyPuzzle ? 'Restart' : 'Play'} Daily Puzzle
+                    </button>
+                    <button
+                      onClick={() => initializeGame(false)}
+                      className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      🎲 {isDailyPuzzle ? 'Play' : 'New'} Random Puzzle
                     </button>
                     <button
                       onClick={reshuffleLayout}
@@ -1536,7 +1700,7 @@
                 {won && (
                   <div className="bg-green-100 border-2 border-green-500 rounded-lg p-6 mb-6 text-center">
                     <h2 className="text-3xl font-bold text-green-800">🎉 You Won! 🎉</h2>
-                    <p className="text-green-700 mt-2">All categories merged successfully!</p>
+                    <p className="text-green-700 mt-2">All {currentPuzzleSize} categories merged successfully!</p>
                   </div>
                 )}
 
