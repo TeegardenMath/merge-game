@@ -8,6 +8,73 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+        .shake {
+            animation: shake 0.3s ease-in-out;
+        }
+        .flash-red {
+            animation: flash-red 0.3s ease-in-out;
+        }
+        @keyframes flash-red {
+            0%, 100% { border-color: inherit; }
+            50% { border-color: #ef4444; }
+        }
+        
+        @keyframes merge-pop {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
+        
+        @keyframes particle-burst {
+            0% { 
+                transform: translate(-50%, -50%) scale(1); 
+                opacity: 1; 
+            }
+            100% { 
+                transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) scale(0); 
+                opacity: 0; 
+            }
+        }
+        
+        @keyframes sparkle {
+            0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        @keyframes scale-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .particle {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            animation: particle-burst 0.5s ease-out forwards;
+            z-index: 999;
+            pointer-events: none;
+        }
+        
+        .sparkle {
+            position: fixed;
+            font-size: 20px;
+            animation: sparkle 0.6s ease-out;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .scale-pulse {
+            animation: scale-pulse 0.3s ease-out;
+        }
+    </style>
 </head>
 <body>
     <div id="root"></div>
@@ -15,8 +82,109 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        // Mutually exclusive category groups - categories in the same group won't appear together
+        const MUTUALLY_EXCLUSIVE_GROUPS = {
+          "rivers": ["Rivers of North America", "Rivers of Europe", "Rivers of Asia"],
+          "countries": ["European Countries", "Asian Countries", "African Countries"],
+          "mythology_gods": ["Greek Gods and Goddesses", "Roman Gods and Goddesses", "Norse Gods", "Egyptian Gods"],
+          "visual_artists": ["Painters", "Sculptors"],
+          "literature_shakespeare": ["Shakespeare Characters", "Shakespeare Plays"],
+          "us_geography": ["U.S. States", "Rivers of North America", "U.S. State Capitals"]
+        };
+
         // Database of categories with their items
         const CATEGORIES = {
+          "Shakespeare Characters": [
+            "Hamlet", "Ophelia", "Macbeth", "Lady Macbeth", "Othello", "Desdemona", "Iago", "Cassio",
+            "Romeo", "Juliet", "Mercutio", "Tybalt", "Benvolio", "Prospero", "Ariel", "Caliban",
+            "Miranda", "Puck", "Oberon", "Titania", "Bottom", "Lysander", "Hermia", "Helena",
+            "Portia", "Shylock", "Bassanio", "Antonio", "Brutus", "Julius Caesar", "Mark Antony",
+            "Cleopatra", "Cassius", "Cordelia", "King Lear", "Goneril", "Regan", "Edmund",
+            "Edgar", "Falstaff", "Prince Hal", "Hotspur", "Petruchio", "Katherina",
+            "Beatrice", "Benedick", "Hero", "Rosalind", "Orlando", "Jaques",
+            "Touchstone", "Viola", "Orsino", "Olivia", "Malvolio", "Feste", "Sebastian", "Polonius",
+            "Laertes", "Claudius", "Gertrude", "Horatio", "Banquo", "Macduff", "Duncan", "Malcolm"
+          ],
+          
+          "Roman Gods and Goddesses": [
+            "Jupiter", "Juno", "Neptune", "Pluto", "Mars", "Venus", "Apollo", "Diana",
+            "Mercury", "Minerva", "Vulcan", "Vesta", "Ceres", "Bacchus", "Saturn", "Janus",
+            "Cupid", "Aurora", "Luna", "Sol", "Fortuna", "Flora", "Proserpina",
+            "Faunus", "Ops", "Quirinus", "Bellona", "Concordia", "Fides", "Spes", "Virtus",
+            "Terminus", "Silvanus", "Pales", "Consus", "Vertumnus", "Pomona", "Liber", "Lucina",
+            "Summanus", "Portunus", "Priapus", "Discordia", "Nemesis", "Mors", "Somnus",
+            "Trivia", "Hecate", "Maia", "Nox", "Carmenta", "Februus", "Picus", "Volturnus"
+          ],
+
+          "Programming Languages": [
+            "Python", "JavaScript", "Java", "Ruby", "Swift", "Rust", "Go", "Kotlin",
+            "TypeScript", "PHP", "Perl", "Scala", "Haskell", "Clojure", "Elixir", "Erlang",
+            "COBOL", "Fortran", "Pascal", "Ada", "Lisp", "Scheme", "Prolog", "ALGOL",
+            "BASIC", "Logo", "Smalltalk", "Simula", "APL", "SNOBOL", "Forth", "PostScript",
+            "Lua", "Tcl", "Groovy", "Dart", "Julia", "Nim", "Crystal", "Zig",
+            "Objective-C", "MATLAB", "Octave", "Racket", "OCaml", "Verilog", "VHDL", "Solidity",
+            "Assembly", "Bash", "PowerShell", "AWK", "Sed", "R", "SAS", "Stata",
+            "Scratch", "LabVIEW", "Apex", "Cobra", "D", "F#", "Hack"
+          ],
+
+          "Bones in the Human Body": [
+            "Femur", "Tibia", "Fibula", "Patella", "Humerus", "Radius", "Ulna", "Scapula",
+            "Clavicle", "Sternum", "Pelvis", "Sacrum", "Coccyx", "Skull",
+            "Mandible", "Maxilla", "Zygomatic", "Temporal", "Parietal", "Frontal", "Occipital", "Sphenoid",
+            "Ethmoid", "Nasal", "Vertebrae", "Ribs", "Carpals", "Metacarpals", "Phalanges",
+            "Tarsals", "Metatarsals", "Calcaneus", "Talus", "Navicular", "Cuboid", "Scaphoid",
+            "Lunate", "Triquetral", "Pisiform", "Trapezium", "Trapezoid", "Capitate", "Hamate", "Malleus",
+            "Incus", "Stapes", "Hyoid", "Cervical", "Thoracic", "Lumbar", "Ilium", "Ischium",
+            "Pubis", "Atlas", "Axis", "Xiphoid", "Palatine", "Vomer", "Lacrimal", "Cuneiform"
+          ],
+
+          "Rivers of North America": [
+            "Mississippi", "Missouri", "Yukon", "Rio Grande", "Colorado", "Arkansas", "Columbia", "Red",
+            "Snake", "Ohio", "Hudson", "Potomac", "Delaware", "Tennessee",
+            "Cumberland", "Platte", "Yellowstone", "Brazos", "Sacramento", "Willamette", "Fraser",
+            "Mackenzie", "Nelson", "Churchill", "Copper", "Tanana",
+            "Green", "Gila", "Salt", "Pecos", "Canadian", "Susquehanna", "James", "Savannah",
+            "Chattahoochee", "Alabama", "Tombigbee", "Mobile", "Pearl", "Pascagoula", "Atchafalaya",
+            "White", "St. Lawrence", "Ottawa", "Saguenay", "Connecticut", "Merrimack", "Kennebec",
+            "Penobscot", "Androscoggin", "Housatonic", "Mohawk", "Allegheny", "Monongahela", "Kanawha",
+            "Wabash", "Illinois", "Wisconsin", "Des Moines", "Cedar", "Iowa"
+          ],
+
+          "Nobel Prize Winners in Literature": [
+            "Ernest Hemingway", "William Faulkner", "John Steinbeck", "Toni Morrison", "Bob Dylan",
+            "Gabriel García Márquez", "Pablo Neruda", "Boris Pasternak", "Albert Camus", "Samuel Beckett",
+            "Hermann Hesse", "Thomas Mann", "André Gide", "George Bernard Shaw", "W.B. Yeats",
+            "Rabindranath Tagore", "Rudyard Kipling", "Winston Churchill", "T.S. Eliot", "Pearl Buck",
+            "Eugene O'Neill", "Sinclair Lewis", "Knut Hamsun", "Bertrand Russell", "Isaac Bashevis Singer",
+            "Saul Bellow", "Joseph Brodsky", "Derek Walcott", "Nadine Gordimer", "Wole Soyinka",
+            "Naguib Mahfouz", "Kenzaburō Ōe", "Seamus Heaney", "Günter Grass", "V.S. Naipaul",
+            "Imre Kertész", "Doris Lessing", "J.M. Coetzee", "Harold Pinter", "Orhan Pamuk",
+            "Jean-Paul Sartre", "Octavio Paz", "Czesław Miłosz", "Elias Canetti", "Gabriel Mistral",
+            "Miguel Ángel Asturias", "Yasunari Kawabata", "Alexander Solzhenitsyn", "Heinrich Böll", "Dario Fo"
+          ],
+
+          "Constellations": [
+            "Orion", "Ursa Major", "Ursa Minor", "Cassiopeia", "Andromeda", "Perseus", "Pegasus",
+            "Cygnus", "Lyra", "Aquila", "Draco", "Hercules", "Boötes", "Gemini", "Cancer", "Leo",
+            "Virgo", "Libra", "Scorpius", "Sagittarius", "Capricornus", "Aquarius", "Pisces", "Aries",
+            "Taurus", "Auriga", "Canis Major", "Canis Minor", "Centaurus", "Cetus", "Eridanus",
+            "Hydra", "Ophiuchus", "Corona Borealis", "Cepheus", "Phoenix", "Grus", "Pavo", "Tucana",
+            "Indus", "Crater", "Corvus", "Lupus", "Ara", "Triangulum", "Sagitta", "Delphinus",
+            "Equuleus", "Vulpecula", "Coma Berenices", "Canes Venatici", "Lynx", "Leo Minor", "Sextans",
+            "Antlia", "Pyxis", "Puppis", "Vela", "Carina", "Columba", "Lepus", "Monoceros", "Sculptor"
+          ],
+
+          "Types of Pasta": [
+            "Penne", "Rigatoni", "Fusilli", "Farfalle", "Linguine", "Fettuccine", "Spaghetti", "Tagliatelle",
+            "Pappardelle", "Bucatini", "Orecchiette", "Conchiglie", "Rotini", "Cavatappi", "Gemelli", "Campanelle",
+            "Radiatori", "Strozzapreti", "Casarecce", "Mafalda", "Paccheri", "Ziti", "Mostaccioli", "Tortiglioni",
+            "Garganelli", "Trofie", "Cavatelli", "Lumache", "Pipe", "Gnocchi", "Maltagliati",
+            "Stelline", "Orzo", "Acini", "Ditalini", "Anellini",
+            "Capellini", "Vermicelli", "Tagliolini", "Trenette", "Bavette", "Mafaldine", "Lasagne", "Cannelloni",
+            "Manicotti", "Ravioli", "Tortellini", "Cappelletti", "Agnolotti", "Mezzelune",
+            "Gigli", "Creste", "Corzetti", "Gramigna", "Pizzoccheri", "Bigoli", "Stracci", "Quadrucci"
+          ],
+
           "U.S. State Capitals": [
             "Montgomery", "Juneau", "Phoenix", "Little Rock", "Sacramento", "Denver", "Hartford", 
             "Dover", "Tallahassee", "Atlanta", "Honolulu", "Boise", "Springfield", "Indianapolis",
@@ -26,29 +194,7 @@
             "Oklahoma City", "Salem", "Harrisburg", "Providence", "Columbia", "Pierre", "Nashville",
             "Austin", "Salt Lake City", "Montpelier", "Richmond", "Olympia", "Charleston", "Madison", "Cheyenne"
           ],
-          "Pantone Colors": [
-            "Cerulean", "Tigerlily", "Aqua Sky", "True Red", "Fuchsia Rose", "Blue Turquoise", 
-            "Sand Dollar", "Chili Pepper", "Blue Iris", "Honeysuckle", "Turquoise", "Tangerine Tango",
-            "Emerald", "Radiant Orchid", "Marsala", "Rose Quartz", "Serenity", "Greenery", 
-            "Ultra Violet", "Living Coral", "Classic Blue", "Illuminating", "Ultimate Gray",
-            "Very Peri", "Viva Magenta", "Peach Fuzz", "Mimosa", "Pink Flamingo", "Sunset Orange",
-            "Lavender", "Mint", "Coral Pink", "Sky Blue", "Lemon Zest", "Berry", "Plum", "Olive",
-            "Burgundy", "Navy", "Charcoal", "Ivory", "Cream", "Beige", "Taupe", "Moss", "Sage",
-            "Teal", "Periwinkle", "Mauve", "Crimson", "Scarlet", "Ruby", "Amber", "Gold"
-          ],
-          "Dinosaurs": [
-            "Tyrannosaurus", "Triceratops", "Velociraptor", "Stegosaurus", "Brachiosaurus",
-            "Ankylosaurus", "Pteranodon", "Diplodocus", "Allosaurus", "Spinosaurus", "Parasaurolophus",
-            "Iguanodon", "Compsognathus", "Pachycephalosaurus", "Brontosaurus", "Apatosaurus",
-            "Carnotaurus", "Dilophosaurus", "Gallimimus", "Corythosaurus", "Styracosaurus",
-            "Deinonychus", "Archaeopteryx", "Protoceratops", "Oviraptor", "Therizinosaurus",
-            "Giganotosaurus", "Carcharodontosaurus", "Acrocanthosaurus", "Ceratosaurus",
-            "Kentrosaurus", "Euoplocephalus", "Nodosaurus", "Edmontosaurus", "Maiasaura",
-            "Lambeosaurus", "Ornithomimus", "Struthiomimus", "Dromaeosaurus", "Utahraptor",
-            "Argentinosaurus", "Sauroposeidon", "Supersaurus", "Seismosaurus", "Camarasaurus",
-            "Plateosaurus", "Coelophysis", "Herrerasaurus", "Eoraptor", "Microraptor",
-            "Sinornithosaurus", "Beipiaosaurus", "Yutyrannus", "Citipati"
-          ],
+
           "Chemical Elements": [
             "Hydrogen", "Helium", "Lithium", "Beryllium", "Boron", "Carbon", "Nitrogen", "Oxygen",
             "Fluorine", "Neon", "Sodium", "Magnesium", "Aluminum", "Silicon", "Phosphorus", "Sulfur",
@@ -56,8 +202,54 @@
             "Manganese", "Iron", "Cobalt", "Nickel", "Copper", "Zinc", "Gallium", "Germanium",
             "Arsenic", "Selenium", "Bromine", "Krypton", "Rubidium", "Strontium", "Yttrium", "Zirconium",
             "Niobium", "Molybdenum", "Technetium", "Ruthenium", "Rhodium", "Palladium", "Silver",
-            "Cadmium", "Indium", "Tin", "Antimony", "Tellurium", "Iodine", "Xenon"
+            "Cadmium", "Indium", "Tin", "Antimony", "Tellurium", "Iodine", "Xenon", "Cesium",
+            "Barium", "Lanthanum", "Cerium", "Praseodymium", "Neodymium", "Promethium", "Samarium", "Europium",
+            "Gadolinium", "Terbium", "Dysprosium", "Holmium", "Erbium", "Thulium", "Ytterbium", "Lutetium",
+            "Hafnium", "Tantalum", "Tungsten", "Rhenium", "Osmium", "Iridium", "Platinum", "Gold",
+            "Mercury", "Thallium", "Lead", "Bismuth", "Polonium", "Astatine", "Radon", "Francium",
+            "Radium", "Actinium", "Thorium", "Protactinium", "Uranium", "Neptunium", "Plutonium", "Americium",
+            "Curium", "Berkelium", "Californium", "Einsteinium", "Fermium", "Mendelevium", "Nobelium", "Lawrencium",
+            "Rutherfordium", "Dubnium", "Seaborgium", "Bohrium", "Hassium", "Meitnerium", "Darmstadtium", "Roentgenium",
+            "Copernicium", "Nihonium", "Flerovium", "Moscovium", "Livermorium", "Tennessine", "Oganesson"
           ],
+
+          "Dog Breeds": [
+            "Labrador", "Golden Retriever", "German Shepherd", "Bulldog", "Beagle", "Poodle", "Rottweiler",
+            "Yorkshire Terrier", "Boxer", "Dachshund", "Chihuahua", "Pomeranian", "Shih Tzu", "Husky",
+            "Corgi", "Dalmatian", "Great Dane", "Doberman", "Boston Terrier", "Pug", "Mastiff",
+            "Bernese Mountain Dog", "Cocker Spaniel", "Border Collie", "Maltese", "Australian Shepherd",
+            "Schnauzer", "Greyhound", "Basset Hound", "Newfoundland", "St. Bernard", "Bloodhound",
+            "Weimaraner", "Whippet", "Akita", "Samoyed", "Bichon Frise", "Havanese", "Cavalier King Charles",
+            "Papillon", "Jack Russell", "Bull Terrier", "Scottish Terrier", "West Highland Terrier",
+            "Cairn Terrier", "Airedale Terrier", "Vizsla", "Brittany", "Pointer", "Setter",
+            "Springer Spaniel", "Cocker Spaniel", "Collie", "Sheltie", "Malamute", "Chow Chow",
+            "Shar Pei", "Basenji", "Afghan Hound", "Saluki", "Borzoi", "Irish Wolfhound", "Rhodesian Ridgeback"
+          ],
+
+          "U.S. Presidents": [
+            "George Washington", "John Adams", "Thomas Jefferson", "James Madison", "James Monroe",
+            "John Quincy Adams", "Andrew Jackson", "Martin Van Buren", "William Henry Harrison", "John Tyler",
+            "James K. Polk", "Zachary Taylor", "Millard Fillmore", "Franklin Pierce", "James Buchanan",
+            "Abraham Lincoln", "Andrew Johnson", "Ulysses S. Grant", "Rutherford B. Hayes", "James Garfield",
+            "Chester A. Arthur", "Grover Cleveland", "Benjamin Harrison", "William McKinley", "Theodore Roosevelt",
+            "William Howard Taft", "Woodrow Wilson", "Warren G. Harding", "Calvin Coolidge", "Herbert Hoover",
+            "Franklin D. Roosevelt", "Harry S. Truman", "Dwight D. Eisenhower", "John F. Kennedy", "Lyndon B. Johnson",
+            "Richard Nixon", "Gerald Ford", "Jimmy Carter", "Ronald Reagan", "George H.W. Bush",
+            "Bill Clinton", "George W. Bush", "Barack Obama", "Donald Trump", "Joe Biden",
+            "John Hanson", "Elbridge Gerry", "Daniel D. Tompkins", "John C. Calhoun", "Henry A. Wallace"
+          ],
+
+          "Musical Instruments": [
+            "Piano", "Guitar", "Violin", "Cello", "Viola", "Bass", "Harp", "Flute",
+            "Clarinet", "Oboe", "Bassoon", "Saxophone", "Trumpet", "Trombone", "French Horn", "Tuba",
+            "Drums", "Cymbals", "Xylophone", "Marimba", "Vibraphone", "Glockenspiel", "Timpani", "Tambourine",
+            "Triangle", "Castanets", "Maracas", "Bongos", "Congas", "Accordion", "Harmonica", "Banjo",
+            "Mandolin", "Ukulele", "Sitar", "Lute", "Balalaika", "Bouzouki", "Dulcimer", "Zither",
+            "Bagpipes", "Didgeridoo", "Panpipes", "Recorder", "Piccolo", "Tuba", "Cornet", "Euphonium",
+            "Bugle", "Ocarina", "Kazoo", "Theremin", "Synthesizer", "Organ", "Harpsichord", "Clavichord",
+            "Celesta", "Mellotron", "Autoharp", "Steel Drum", "Tabla", "Djembe", "Koto", "Shamisen"
+          ],
+
           "Pizza Toppings": [
             "Pepperoni", "Mushrooms", "Onions", "Sausage", "Bacon", "Olives", "Peppers", "Pineapple",
             "Spinach", "Tomatoes", "Chicken", "Ham", "Beef", "Anchovies", "Basil", "Garlic",
@@ -65,7 +257,909 @@
             "Broccoli", "Zucchini", "Eggplant", "Corn", "Pesto", "BBQ Sauce", "Ranch", "Buffalo Sauce",
             "Sun-dried Tomatoes", "Roasted Peppers", "Capers", "Gorgonzola", "Provolone", "Goat Cheese",
             "Parmesan", "Cheddar", "Mozzarella", "Shrimp", "Clams", "Tuna", "Salmon", "Chorizo",
-            "Pulled Pork", "Steak", "Turkey", "Eggs", "Potatoes", "Pickles", "Kimchi", "Sriracha"
+            "Pulled Pork", "Steak", "Turkey", "Eggs", "Potatoes", "Pickles", "Sriracha", "Pesto",
+            "Alfredo", "Marinara", "Barbecue", "Hot Honey", "Truffle Oil", "Fig Jam", "Balsamic"
+          ],
+
+          "Greek Gods and Goddesses": [
+            "Zeus", "Hera", "Poseidon", "Hades", "Athena", "Apollo", "Artemis", "Ares",
+            "Aphrodite", "Hephaestus", "Hermes", "Dionysus", "Demeter", "Hestia", "Persephone", "Hebe",
+            "Hecate", "Iris", "Nike", "Tyche", "Nemesis", "Eros", "Hypnos", "Thanatos",
+            "Pan", "Helios", "Selene", "Eos", "Atlas", "Prometheus", "Epimetheus", "Cronus",
+            "Rhea", "Gaia", "Uranus", "Chaos", "Nyx", "Erebus", "Aether", "Hemera",
+            "Pontus", "Oceanus", "Tethys", "Hyperion", "Theia", "Coeus", "Phoebe", "Mnemosyne",
+            "Themis", "Iapetus", "Crius", "Asclepius", "Heracles", "Perseus", "Theseus", "Achilles",
+            "Odysseus", "Ajax", "Orpheus", "Castor", "Pollux", "Midas", "Pygmalion", "Daedalus"
+          ],
+
+          "Dinosaurs": [
+            "Tyrannosaurus", "Triceratops", "Velociraptor", "Stegosaurus", "Brachiosaurus",
+            "Ankylosaurus", "Pteranodon", "Diplodocus", "Allosaurus", "Spinosaurus", "Parasaurolophus",
+            "Iguanodon", "Pachycephalosaurus", "Apatosaurus", "Carnotaurus", "Dilophosaurus",
+            "Gallimimus", "Corythosaurus", "Styracosaurus", "Deinonychus", "Archaeopteryx", "Protoceratops",
+            "Oviraptor", "Therizinosaurus", "Giganotosaurus", "Carcharodontosaurus", "Acrocanthosaurus",
+            "Ceratosaurus", "Kentrosaurus", "Euoplocephalus", "Edmontosaurus", "Maiasaura", "Lambeosaurus",
+            "Ornithomimus", "Struthiomimus", "Dromaeosaurus", "Utahraptor", "Argentinosaurus", "Sauroposeidon",
+            "Supersaurus", "Camarasaurus", "Plateosaurus", "Coelophysis", "Herrerasaurus", "Eoraptor",
+            "Microraptor", "Beipiaosaurus", "Yutyrannus", "Citipati", "Compsognathus", "Dimetrodon",
+            "Mosasaurus", "Plesiosaurus", "Ichthyosaurus", "Pterodactyl", "Quetzalcoatlus", "Dimorphodon",
+            "Rhamphorhynchus", "Elasmosaurus", "Liopleurodon", "Kronosaurus"
+          ],
+
+          "European Countries": [
+            "France", "Germany", "Italy", "Spain", "Portugal", "Netherlands", "Belgium", "Switzerland",
+            "Austria", "Poland", "Greece", "Norway", "Sweden", "Denmark", "Finland", "Ireland",
+            "Iceland", "Hungary", "Romania", "Bulgaria", "Croatia", "Serbia", "Slovakia", "Slovenia",
+            "Lithuania", "Latvia", "Estonia", "Albania", "Macedonia", "Montenegro", "Bosnia",
+            "Luxembourg", "Malta", "Cyprus", "Czech Republic", "Ukraine", "Belarus", "Moldova",
+            "Kosovo", "Andorra", "Monaco", "Liechtenstein", "San Marino", "Vatican City", "Russia",
+            "Armenia", "Azerbaijan", "Georgia", "Kazakhstan", "Turkey"
+          ],
+
+          "African Countries": [
+            "Egypt", "Morocco", "Algeria", "Tunisia", "Libya", "Sudan", "Ethiopia", "Kenya",
+            "Tanzania", "Uganda", "Nigeria", "Ghana", "Senegal", "Mali", "Cameroon", "Zimbabwe",
+            "Zambia", "Botswana", "Namibia", "Angola", "Mozambique", "Madagascar", "Somalia", "Rwanda",
+            "Burundi", "Malawi", "Lesotho", "Eswatini", "South Africa", "Congo", "Chad", "Niger",
+            "Mauritania", "Burkina Faso", "Benin", "Togo", "Gabon", "Eritrea", "Djibouti", "Guinea",
+            "Sierra Leone", "Liberia", "Ivory Coast", "Equatorial Guinea", "Central African Republic",
+            "Mauritius", "Seychelles", "Comoros", "Cape Verde", "Gambia", "Guinea-Bissau", "Sao Tome"
+          ],
+
+          "Asian Countries": [
+            "China", "Japan", "India", "Thailand", "Vietnam", "Indonesia", "Philippines", "Malaysia",
+            "Singapore", "South Korea", "North Korea", "Myanmar", "Cambodia", "Laos", "Bangladesh",
+            "Pakistan", "Afghanistan", "Nepal", "Bhutan", "Sri Lanka", "Maldives", "Mongolia",
+            "Kazakhstan", "Uzbekistan", "Turkmenistan", "Kyrgyzstan", "Tajikistan", "Iran", "Iraq",
+            "Syria", "Jordan", "Lebanon", "Israel", "Palestine", "Saudi Arabia", "Yemen", "Oman",
+            "Kuwait", "Bahrain", "Qatar", "United Arab Emirates", "Armenia", "Azerbaijan", "Georgia",
+            "Taiwan", "Brunei", "East Timor", "Macau", "Hong Kong", "Tibet"
+          ],
+
+          "Vegetables": [
+            "Carrot", "Broccoli", "Cauliflower", "Spinach", "Lettuce", "Kale", "Cabbage", "Brussels Sprouts",
+            "Asparagus", "Celery", "Cucumber", "Zucchini", "Eggplant", "Tomato", "Pepper", "Onion",
+            "Garlic", "Potato", "Sweet Potato", "Yam", "Turnip", "Radish", "Beet", "Parsnip",
+            "Rutabaga", "Artichoke", "Corn", "Peas", "Green Beans", "Lima Beans", "Edamame", "Okra",
+            "Mushroom", "Leek", "Scallion", "Shallot", "Chive", "Fennel", "Chard", "Collard Greens",
+            "Arugula", "Watercress", "Endive", "Radicchio", "Bok Choy", "Napa Cabbage", "Kohlrabi",
+            "Jicama", "Taro", "Cassava", "Plantain", "Squash", "Pumpkin", "Butternut", "Acorn Squash",
+            "Spaghetti Squash", "Delicata", "Kabocha", "Rhubarb", "Bamboo Shoots", "Water Chestnuts", "Bean Sprouts"
+          ],
+
+          "Fruits": [
+            "Apple", "Orange", "Banana", "Grape", "Strawberry", "Blueberry", "Raspberry", "Blackberry",
+            "Mango", "Pineapple", "Watermelon", "Cantaloupe", "Honeydew", "Peach", "Plum", "Nectarine",
+            "Apricot", "Cherry", "Pear", "Kiwi", "Papaya", "Guava", "Passionfruit", "Dragon Fruit",
+            "Lychee", "Rambutan", "Longan", "Persimmon", "Pomegranate", "Fig", "Date", "Coconut",
+            "Avocado", "Lemon", "Lime", "Grapefruit", "Tangerine", "Clementine", "Mandarin", "Kumquat",
+            "Blood Orange", "Cranberry", "Gooseberry", "Currant", "Elderberry", "Mulberry", "Boysenberry",
+            "Loganberry", "Starfruit", "Jackfruit", "Durian", "Mangosteen", "Acai", "Goji Berry",
+            "Cactus Pear", "Plantain", "Breadfruit", "Feijoa", "Quince", "Medlar", "Loquat", "Cherimoya"
+          ],
+
+          "Classical Composers": [
+            "Bach", "Mozart", "Beethoven", "Brahms", "Chopin", "Liszt", "Schumann", "Schubert",
+            "Haydn", "Handel", "Vivaldi", "Tchaikovsky", "Rachmaninoff", "Prokofiev", "Shostakovich",
+            "Stravinsky", "Debussy", "Ravel", "Satie", "Berlioz", "Saint-Saëns", "Fauré", "Poulenc",
+            "Wagner", "Strauss", "Mahler", "Bruckner", "Mendelssohn", "Schumann", "Weber", "Gluck",
+            "Verdi", "Puccini", "Rossini", "Donizetti", "Bellini", "Monteverdi", "Palestrina", "Pergolesi",
+            "Grieg", "Sibelius", "Nielsen", "Elgar", "Vaughan Williams", "Holst", "Britten", "Purcell",
+            "Dvořák", "Smetana", "Janáček", "Bartók", "Kodály", "Copland", "Gershwin", "Bernstein",
+            "Barber", "Ives", "Glass", "Reich", "Adams", "Górecki", "Pärt", "Messiaen"
+          ],
+
+          "Painters": [
+            "Leonardo da Vinci", "Michelangelo", "Raphael", "Caravaggio", "Rembrandt", "Vermeer", "Rubens", "Van Dyck",
+            "Velázquez", "Goya", "El Greco", "Monet", "Renoir", "Degas", "Manet", "Pissarro",
+            "Cézanne", "Van Gogh", "Gauguin", "Toulouse-Lautrec", "Seurat", "Picasso", "Matisse", "Braque",
+            "Kandinsky", "Mondrian", "Klee", "Miró", "Dalí", "Magritte", "Pollock", "Rothko",
+            "Warhol", "Lichtenstein", "Hockney", "Bacon", "Freud", "Hopper", "O'Keeffe", "Wood",
+            "Wyeth", "Sargent", "Whistler", "Homer", "Cassatt", "Bellows", "Titian", "Tintoretto",
+            "Botticelli", "Giotto", "Masaccio", "Piero della Francesca", "Mantegna", "Bellini", "Bruegel",
+            "Bosch", "Dürer", "Holbein", "Cranach", "Hals", "Turner", "Constable", "Delacroix"
+          ],
+
+          "Mountain Ranges": [
+            "Himalayas", "Andes", "Rockies", "Alps", "Pyrenees", "Appalachians", "Urals", "Atlas",
+            "Caucasus", "Carpathians", "Dinaric Alps", "Balkan Mountains", "Apennines", "Sierra Nevada",
+            "Cascades", "Coast Mountains", "Alaska Range", "Brooks Range", "Hindu Kush", "Karakoram",
+            "Pamirs", "Tian Shan", "Altai", "Sayan", "Kunlun", "Zagros", "Elburz", "Taurus",
+            "Great Dividing Range", "Southern Alps", "Transantarctic Mountains", "Drakensberg", "Ethiopian Highlands",
+            "Rwenzori", "Virunga", "Scandinavian Mountains", "Scottish Highlands", "Pennines", "Cambrian Mountains",
+            "Grampians", "Blue Mountains", "Snowy Mountains", "Flinders Ranges", "MacDonnell Ranges", "Sierra Madre",
+            "Canadian Rockies", "Saint Elias Mountains", "Chugach Mountains", "Wrangell Mountains", "Adirondacks"
+          ],
+
+          "Oceans and Seas": [
+            "Pacific", "Atlantic", "Indian", "Arctic", "Southern", "Mediterranean", "Caribbean", "Baltic",
+            "North Sea", "Red Sea", "Black Sea", "Caspian Sea", "Dead Sea", "Coral Sea", "Tasman Sea",
+            "Arabian Sea", "South China Sea", "East China Sea", "Sea of Japan", "Yellow Sea", "Bering Sea",
+            "Sea of Okhotsk", "Barents Sea", "Kara Sea", "Laptev Sea", "East Siberian Sea", "Chukchi Sea",
+            "Beaufort Sea", "Greenland Sea", "Norwegian Sea", "Irish Sea", "Adriatic Sea", "Aegean Sea",
+            "Ionian Sea", "Tyrrhenian Sea", "Ligurian Sea", "Balearic Sea", "Alboran Sea", "Gulf of Mexico",
+            "Gulf of California", "Hudson Bay", "Baffin Bay", "Davis Strait", "Gulf of Guinea", "Mozambique Channel",
+            "White Sea", "Sea of Azov", "Sea of Marmara", "Andaman Sea", "Sulu Sea"
+          ],
+
+          "U.S. States": [
+            "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
+            "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas",
+            "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
+            "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York",
+            "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
+            "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
+            "Wisconsin", "Wyoming", "District of Columbia", "Puerto Rico", "Guam", "American Samoa", "U.S. Virgin Islands",
+            "Northern Mariana Islands", "Franklin", "Deseret", "Jefferson", "Lincoln", "Absaroka", "Superior", "Texlahoma"
+          ],
+
+          "Olympic Sports": [
+            "Athletics", "Swimming", "Gymnastics", "Diving", "Basketball", "Volleyball", "Soccer", "Tennis",
+            "Badminton", "Table Tennis", "Boxing", "Wrestling", "Judo", "Taekwondo", "Karate", "Fencing",
+            "Archery", "Shooting", "Rowing", "Canoeing", "Kayaking", "Sailing", "Surfing", "Skateboarding",
+            "Cycling", "Equestrian", "Triathlon", "Pentathlon", "Decathlon", "Heptathlon", "Marathon", "Hurdles",
+            "Pole Vault", "High Jump", "Long Jump", "Triple Jump", "Shot Put", "Discus", "Javelin", "Hammer Throw",
+            "Hockey", "Rugby", "Baseball", "Softball", "Golf", "Handball", "Water Polo", "Synchronized Swimming",
+            "Trampoline", "Rhythmic Gymnastics", "BMX", "Mountain Biking", "Track Cycling", "Artistic Swimming",
+            "Breaking", "Sport Climbing", "Weightlifting", "Snowboarding", "Skiing", "Curling", "Bobsled", "Luge"
+          ],
+
+          "Coffee Drinks": [
+            "Espresso", "Americano", "Cappuccino", "Latte", "Macchiato", "Mocha", "Cortado", "Flat White",
+            "Ristretto", "Lungo", "Doppio", "Affogato", "Breve", "Con Panna", "Café au Lait", "Café Bombón",
+            "Café Cubano", "Café con Leche", "Café Noisette", "Café Zorro", "Turkish Coffee", "Greek Coffee",
+            "Vietnamese Coffee", "Irish Coffee", "Spanish Coffee", "French Press", "Pour Over", "Drip Coffee",
+            "Cold Brew", "Nitro Cold Brew", "Iced Coffee", "Iced Latte", "Iced Americano", "Iced Mocha",
+            "Frappuccino", "Caramel Macchiato", "White Chocolate Mocha", "Pumpkin Spice Latte", "Dirty Chai",
+            "Red Eye", "Black Eye", "Dead Eye", "Bulletproof Coffee", "Dalgona Coffee", "Mazagran",
+            "Cortadito", "Café Miel", "Honey Latte", "Cinnamon Latte", "Shakerato"
+          ],
+
+          "Card Games": [
+            "Poker", "Blackjack", "Bridge", "Hearts", "Spades", "Rummy", "Gin Rummy", "Canasta",
+            "Euchre", "Pinochle", "Cribbage", "Solitaire", "Klondike", "Spider", "FreeCell", "Pyramid",
+            "Crazy Eights", "Go Fish", "Old Maid", "War", "Snap", "Slapjack", "Kings in the Corner",
+            "President", "Asshole", "Egyptian Ratscrew", "B.S.", "Kemps", "Mao", "Phase 10",
+            "Uno", "Skip-Bo", "Rook", "Whist", "Oh Hell", "Bourré", "Pitch", "Casino",
+            "Napoleon", "Piquet", "Bezique", "Schnapsen", "Sixty-Six", "Tarot", "Barbu", "Ninety-Nine",
+            "Durak", "Belote", "Skat", "Doppelkopf"
+          ],
+
+          "Board Games": [
+            "Chess", "Checkers", "Go", "Backgammon", "Monopoly", "Scrabble", "Clue", "Risk",
+            "Stratego", "Battleship", "Connect Four", "Othello", "Mastermind", "Sorry", "Trouble", "Parcheesi",
+            "Chutes and Ladders", "Candy Land", "Life", "Payday", "Trivial Pursuit", "Pictionary", "Cranium",
+            "Catan", "Carcassonne", "Ticket to Ride", "Pandemic", "Dominion", "Agricola", "Puerto Rico",
+            "Splendor", "Azul", "Wingspan", "7 Wonders", "Codenames", "Dixit", "Telestrations", "Settlers",
+            "Mancala", "Draughts", "Reversi", "Shogi", "Xiangqi", "Mahjong", "Rummikub",
+            "Gloomhaven", "Terraforming Mars", "Brass", "Scythe", "Root"
+          ],
+
+          "Video Game Franchises": [
+            "Mario", "Zelda", "Pokémon", "Sonic", "Metroid", "Kirby", "Donkey Kong", "Mega Man",
+            "Final Fantasy", "Dragon Quest", "Street Fighter", "Mortal Kombat", "Tekken", "Soul Calibur",
+            "Call of Duty", "Battlefield", "Halo", "Gears of War", "Uncharted", "The Last of Us",
+            "God of War", "Assassin's Creed", "Grand Theft Auto", "Red Dead Redemption", "Fallout", "Elder Scrolls",
+            "Witcher", "Dark Souls", "Bloodborne", "Sekiro", "Resident Evil", "Silent Hill", "Metal Gear",
+            "Castlevania", "Contra", "Gradius", "StarCraft", "Warcraft", "Diablo", "Overwatch",
+            "Portal", "Half-Life", "Bioshock", "Dishonored", "Doom", "Quake", "Wolfenstein", "Borderlands",
+            "Mass Effect", "Dragon Age", "Kingdom Hearts", "Persona", "Yakuza", "Minecraft", "Terraria", "Stardew Valley"
+          ],
+
+          "Superheroes": [
+            "Superman", "Batman", "Wonder Woman", "Spider-Man", "Iron Man", "Captain America", "Thor", "Hulk",
+            "Black Widow", "Hawkeye", "Black Panther", "Doctor Strange", "Scarlet Witch", "Vision", "Ant-Man",
+            "Wasp", "Captain Marvel", "She-Hulk", "Daredevil", "Jessica Jones", "Luke Cage", "Iron Fist",
+            "Punisher", "Wolverine", "Cyclops", "Storm", "Jean Grey", "Rogue", "Gambit", "Beast",
+            "Nightcrawler", "Colossus", "Iceman", "Angel", "Professor X", "Magneto", "Deadpool", "Cable",
+            "Fantastic Four", "Mr. Fantastic", "Invisible Woman", "Human Torch", "Thing", "Silver Surfer",
+            "Flash", "Green Lantern", "Aquaman", "Cyborg", "Shazam", "Green Arrow", "Martian Manhunter",
+            "Supergirl", "Batgirl", "Robin", "Nightwing", "Red Hood", "Catwoman", "Harley Quinn", "Poison Ivy"
+          ],
+
+          "Planets and Moons": [
+            "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto",
+            "Moon", "Phobos", "Deimos", "Io", "Europa", "Ganymede", "Callisto", "Titan", "Rhea",
+            "Iapetus", "Dione", "Tethys", "Enceladus", "Mimas", "Hyperion", "Phoebe", "Titania",
+            "Oberon", "Ariel", "Umbriel", "Miranda", "Triton", "Nereid", "Proteus", "Charon",
+            "Eris", "Haumea", "Makemake", "Ceres", "Vesta", "Pallas", "Hygiea", "Amalthea",
+            "Himalia", "Elara", "Pasiphae", "Sinope", "Lysithea", "Carme", "Ananke", "Leda",
+            "Thebe", "Adrastea", "Metis", "Callirrhoe", "Themisto", "Megaclite", "Taygete", "Chaldene",
+            "Harpalyke", "Kalyke", "Iocaste", "Erinome", "Isonoe", "Praxidike"
+          ],
+
+          "Car Brands": [
+            "Toyota", "Honda", "Ford", "Chevrolet", "Volkswagen", "BMW", "Mercedes-Benz", "Audi",
+            "Nissan", "Mazda", "Subaru", "Hyundai", "Kia", "Lexus", "Acura", "Infiniti",
+            "Porsche", "Ferrari", "Lamborghini", "Maserati", "Bugatti", "McLaren", "Aston Martin", "Bentley",
+            "Rolls-Royce", "Jaguar", "Land Rover", "Mini", "Volvo", "Saab", "Peugeot", "Renault",
+            "Citroën", "Fiat", "Alfa Romeo", "Lancia", "Tesla", "Rivian", "Lucid", "Fisker",
+            "Cadillac", "Buick", "GMC", "Chrysler", "Dodge", "Jeep", "Ram", "Lincoln",
+            "Genesis", "Mitsubishi", "Suzuki", "Isuzu", "Daihatsu", "Scion", "Saturn", "Pontiac"
+          ],
+
+          "Spices and Herbs": [
+            "Basil", "Oregano", "Thyme", "Rosemary", "Sage", "Parsley", "Cilantro", "Dill",
+            "Mint", "Chives", "Tarragon", "Marjoram", "Bay Leaf", "Lavender", "Fennel", "Anise",
+            "Coriander", "Cumin", "Cardamom", "Cinnamon", "Nutmeg", "Clove", "Ginger", "Turmeric",
+            "Paprika", "Cayenne", "Chili Powder", "Black Pepper", "White Pepper", "Pink Peppercorn", "Sichuan Peppercorn",
+            "Allspice", "Star Anise", "Fenugreek", "Mustard", "Celery Seed", "Poppy Seed", "Sesame",
+            "Caraway", "Nigella", "Sumac", "Za'atar", "Saffron", "Vanilla", "Juniper", "Mace",
+            "Chervil", "Savory", "Epazote", "Lemongrass"
+          ],
+
+          "Cocktails": [
+            "Martini", "Manhattan", "Old Fashioned", "Negroni", "Margarita", "Daiquiri", "Mojito", "Cosmopolitan",
+            "Moscow Mule", "Whiskey Sour", "Amaretto Sour", "Tom Collins", "John Collins", "Gin and Tonic",
+            "Rum and Coke", "Dark and Stormy", "Mai Tai", "Piña Colada", "Zombie", "Hurricane",
+            "Sazerac", "Mint Julep", "Boulevardier", "Sidecar", "Aviation", "Corpse Reviver", "Last Word",
+            "Paper Plane", "Aperol Spritz", "Campari Spritz", "Bellini", "Mimosa", "Bloody Mary", "Michelada",
+            "Paloma", "Tequila Sunrise", "Long Island Iced Tea", "Sex on the Beach", "Fuzzy Navel", "Alabama Slammer",
+            "Kamikaze", "Lemon Drop", "Appletini", "Espresso Martini", "French 75", "Kir Royale", "Pisco Sour",
+            "Caipirinha", "Singapore Sling", "Rusty Nail"
+          ],
+
+          "Cheeses": [
+            "Cheddar", "Mozzarella", "Parmesan", "Gouda", "Brie", "Camembert", "Feta", "Ricotta",
+            "Swiss", "Gruyère", "Emmental", "Provolone", "Manchego", "Pecorino", "Gorgonzola", "Roquefort",
+            "Stilton", "Blue Cheese", "Havarti", "Muenster", "Monterey Jack", "Pepper Jack", "Colby",
+            "Asiago", "Fontina", "Taleggio", "Raclette", "Comté", "Beaufort", "Reblochon", "Époisses",
+            "Pont-l'Évêque", "Livarot", "Neufchâtel", "Boursin", "Chèvre", "Halloumi", "Paneer", "Queso Fresco",
+            "Cotija", "Oaxaca", "Mascarpone", "Burrata", "Stracciatella", "Scamorza", "Caciocavallo", "Limburger",
+            "Jarlsberg", "Edam", "Appenzeller", "Tilsit", "Port Salut", "Saint-Nectaire", "Morbier", "Mimolette",
+            "Valencay", "Crottin", "Rocamadour", "Chaource", "Langres", "Maroilles", "Munster", "Tomme"
+          ],
+
+          "Types of Trees": [
+            "Oak", "Maple", "Pine", "Spruce", "Fir", "Cedar", "Birch", "Ash",
+            "Elm", "Willow", "Poplar", "Aspen", "Beech", "Hickory", "Walnut", "Cherry",
+            "Apple", "Pear", "Peach", "Plum", "Magnolia", "Dogwood", "Redwood", "Sequoia",
+            "Cypress", "Juniper", "Yew", "Hemlock", "Larch", "Sycamore", "Chestnut", "Alder",
+            "Cottonwood", "Basswood", "Buckeye", "Catalpa", "Locust", "Mulberry", "Persimmon", "Sassafras",
+            "Sweetgum", "Tulip Tree", "Hackberry", "Hornbeam", "Ironwood", "Linden", "Eucalyptus", "Acacia",
+            "Baobab", "Teak", "Mahogany", "Ebony", "Rosewood", "Sandalwood", "Bamboo", "Palm"
+          ],
+
+          "Mythological Creatures": [
+            "Dragon", "Phoenix", "Unicorn", "Griffin", "Pegasus", "Centaur", "Minotaur", "Hydra",
+            "Chimera", "Sphinx", "Basilisk", "Cockatrice", "Manticore", "Wyvern", "Kraken", "Leviathan",
+            "Behemoth", "Cerberus", "Medusa", "Gorgon", "Cyclops", "Harpy", "Siren", "Mermaid",
+            "Selkie", "Kelpie", "Banshee", "Leprechaun", "Fairy", "Pixie", "Sprite", "Nymph",
+            "Dryad", "Naiad", "Satyr", "Faun", "Troll", "Ogre", "Goblin", "Imp",
+            "Demon", "Djinn", "Ifrit", "Golem", "Gargoyle", "Ghoul", "Wraith", "Specter",
+            "Vampire", "Werewolf", "Zombie", "Lich", "Wendigo", "Chupacabra", "Sasquatch", "Yeti"
+          ],
+
+          "Famous Scientists": [
+            "Isaac Newton", "Albert Einstein", "Galileo Galilei", "Charles Darwin", "Marie Curie", "Nikola Tesla",
+            "Stephen Hawking", "Carl Sagan", "Richard Feynman", "Niels Bohr", "Werner Heisenberg", "Erwin Schrödinger",
+            "Max Planck", "Ernest Rutherford", "J.J. Thomson", "Michael Faraday", "James Clerk Maxwell", "Ludwig Boltzmann",
+            "Louis Pasteur", "Robert Koch", "Alexander Fleming", "Jonas Salk", "Francis Crick", "James Watson",
+            "Rosalind Franklin", "Gregor Mendel", "Barbara McClintock", "Jane Goodall", "Rachel Carson", "Linus Pauling",
+            "Dorothy Hodgkin", "Ada Lovelace", "Alan Turing", "John von Neumann", "Claude Shannon", "Grace Hopper",
+            "Katherine Johnson", "Emmy Noether", "Srinivasa Ramanujan", "Leonhard Euler", "Carl Friedrich Gauss", "Bernhard Riemann",
+            "Pierre de Fermat", "Blaise Pascal", "René Descartes", "Archimedes", "Euclid", "Pythagoras",
+            "Robert Oppenheimer", "Enrico Fermi"
+          ],
+
+          "Architectural Styles": [
+            "Gothic", "Baroque", "Renaissance", "Romanesque", "Byzantine", "Neoclassical", "Art Deco", "Art Nouveau",
+            "Bauhaus", "Modernist", "Brutalist", "Postmodern", "Deconstructivist", "Victorian", "Georgian", "Federal",
+            "Colonial", "Greek Revival", "Italianate", "Second Empire", "Queen Anne", "Romanesque Revival", "Beaux-Arts",
+            "Prairie School", "Craftsman", "Bungalow", "Cape Cod", "Ranch", "Split-Level", "Contemporary",
+            "International", "High-Tech", "Minimalist", "Organic", "Vernacular", "Traditional", "Mediterranean", "Spanish Colonial",
+            "Mission Revival", "Pueblo Revival", "Tudor", "Jacobean", "Elizabethan", "Palladian", "Regency", "Empire",
+            "Streamline Moderne", "Constructivist", "Expressionist", "Metabolist"
+          ],
+
+          "Musical Genres": [
+            "Rock", "Pop", "Jazz", "Blues", "Country", "Classical", "Hip Hop", "Rap",
+            "R&B", "Soul", "Funk", "Disco", "Electronic", "House", "Techno", "Trance",
+            "Dubstep", "Drum and Bass", "Ambient", "IDM", "Reggae", "Ska", "Dub", "Punk",
+            "Hardcore", "Metal", "Heavy Metal", "Death Metal", "Black Metal", "Grunge", "Alternative", "Indie",
+            "Folk", "Bluegrass", "Gospel", "Spiritual", "Opera", "Musical Theater", "Swing", "Big Band",
+            "Bebop", "Cool Jazz", "Hard Bop", "Free Jazz", "Fusion", "Latin", "Salsa", "Merengue",
+            "Bachata", "Cumbia", "Tango", "Flamenco", "Fado", "Bossa Nova", "Samba", "Reggaeton",
+            "K-Pop", "J-Pop", "Afrobeat", "Highlife", "Soukous", "Mbalax", "Raï", "Qawwali"
+          ],
+
+          "Palindromes": [
+            "Racecar", "Kayak", "Level", "Radar", "Civic", "Rotor", "Refer", "Deified",
+            "Reviver", "Rotator", "Redder", "Sagas", "Solos", "Stats", "Tenet", "Madam",
+            "Noon", "Peep", "Pup", "Deed", "Kook", "Toot", "Sees", "Bob",
+            "Mom", "Dad", "Pop", "Sis", "Wow", "Ewe", "Eye", "Gag",
+            "Gig", "Mum", "Nun", "Pep", "Pip", "Poop", "Tut", "Aha",
+            "Ava", "Ada", "Anna", "Elle", "Hannah", "Otto", "Kayak", "Malayalam",
+            "Rotavator", "Detartrated", "Tattarrattat", "Kinnikinnik", "Aibohphobia", "Senile Felines", "Never Odd or Even", "A Man A Plan A Canal Panama"
+          ],
+
+          "Compound Words": [
+            "Breakfast", "Afternoon", "Sunset", "Moonlight", "Starfish", "Butterfly", "Baseball", "Basketball",
+            "Football", "Softball", "Snowball", "Fireball", "Waterfall", "Rainfall", "Landfall", "Nightfall",
+            "Footprint", "Fingerprint", "Blueprint", "Checkpoint", "Viewpoint", "Standpoint", "Gunpoint", "Endpoint",
+            "Butterfly", "Dragonfly", "Firefly", "Housefly", "Horsefly", "Blackberry", "Blueberry", "Strawberry",
+            "Raspberry", "Cranberry", "Gooseberry", "Blackbird", "Bluebird", "Mockingbird", "Hummingbird", "Woodpecker",
+            "Grasshopper", "Earthworm", "Bookworm", "Silkworm", "Tapeworm", "Roundworm", "Honeybee", "Bumblebee",
+            "Honeycomb", "Honeymoon", "Sunflower", "Wallflower", "Wildflower", "Cauliflower", "Passionflower", "Cornflower",
+            "Lighthouse", "Greenhouse", "Warehouse", "Courthouse", "Firehouse", "Doghouse", "Treehouse", "Dollhouse"
+          ],
+
+          "Words Ending in -tion": [
+            "Action", "Reaction", "Attraction", "Distraction", "Contraction", "Extraction", "Subtraction", "Fraction",
+            "Fiction", "Diction", "Iction", "Addiction", "Conviction", "Eviction", "Restriction", "Prediction",
+            "Nation", "Station", "Vacation", "Location", "Education", "Graduation", "Celebration", "Declaration",
+            "Narration", "Duration", "Frustration", "Illustration", "Administration", "Communication", "Examination", "Imagination",
+            "Information", "Transformation", "Confirmation", "Determination", "Presentation", "Representation", "Interpretation", "Implementation",
+            "Organization", "Civilization", "Realization", "Visualization", "Population", "Revolution", "Evolution", "Solution",
+            "Pollution", "Resolution", "Absolution", "Dissolution", "Contribution", "Distribution", "Attribution", "Retribution",
+            "Institution", "Constitution", "Substitution", "Prosecution", "Persecution", "Execution", "Question", "Suggestion"
+          ],
+
+          "Words Starting with Q": [
+            "Queen", "Quest", "Question", "Quick", "Quiet", "Quit", "Quote", "Quilt",
+            "Quake", "Qualify", "Quality", "Quantity", "Quarrel", "Quarry", "Quarter", "Quartet",
+            "Quartz", "Quasar", "Quay", "Queasy", "Quench", "Query", "Queue", "Quibble",
+            "Quiche", "Quicksand", "Quicksilver", "Quid", "Quill", "Quinine", "Quintessential", "Quintet",
+            "Quintuple", "Quip", "Quirk", "Quiver", "Quiz", "Quorum", "Quota", "Quotation",
+            "Quotient", "Quagmire", "Quail", "Quaint", "Qualm", "Quantum", "Quarantine", "Quark",
+            "Quaff", "Quadrant", "Quadruple", "Quadruplet", "Quandary", "Quantify", "Quarrelsome", "Quarterly",
+            "Quartermaster", "Quaver", "Queasiness", "Querulous", "Questionnaire", "Quesadilla", "Quicken", "Quickness"
+          ],
+
+          "Five Letter Words": [
+            "Apple", "Bread", "Crane", "Dance", "Eagle", "Flame", "Grace", "House",
+            "Image", "Joker", "Knife", "Lemon", "Melon", "Ninja", "Ocean", "Piano",
+            "Queen", "River", "Snake", "Table", "Uncle", "Viper", "Whale", "Xenon",
+            "Yacht", "Zebra", "Beach", "Cloud", "Daisy", "Earth", "Fancy", "Globe",
+            "Happy", "Input", "Joint", "Kiosk", "Light", "Magic", "Noise", "Organ",
+            "Peace", "Quest", "Radio", "Space", "Tiger", "Unity", "Video", "Water",
+            "Youth", "Zebra", "Arose", "Burst", "Chirp", "Drown", "Evoke", "Flock",
+            "Grind", "Haunt", "Ivory", "Jelly", "Knead", "Lapse", "Merge", "Notch"
+          ],
+
+          "Flowers": [
+            "Rose", "Tulip", "Daisy", "Lily", "Orchid", "Sunflower", "Carnation", "Chrysanthemum",
+            "Daffodil", "Iris", "Peony", "Hydrangea", "Azalea", "Begonia", "Camellia", "Dahlia",
+            "Gardenia", "Geranium", "Hibiscus", "Jasmine", "Lavender", "Lilac", "Magnolia", "Marigold",
+            "Pansy", "Petunia", "Poppy", "Primrose", "Snapdragon", "Violet", "Zinnia", "Amaryllis",
+            "Anemone", "Aster", "Bleeding Heart", "Bluebell", "Buttercup", "Calla Lily", "Clover", "Columbine",
+            "Cosmos", "Crocus", "Delphinium", "Fuchsia", "Gladiolus", "Honeysuckle", "Hyacinth", "Impatiens",
+            "Larkspur", "Lotus", "Lupine", "Morning Glory", "Narcissus", "Nasturtium", "Periwinkle", "Poinsettia",
+            "Ranunculus", "Rhododendron", "Snowdrop", "Sweet Pea", "Tuberose", "Verbena", "Wisteria", "Yarrow"
+          ],
+
+          "Rivers of Europe": [
+            "Thames", "Seine", "Rhine", "Danube", "Volga", "Dnieper", "Don", "Elbe",
+            "Loire", "Rhone", "Po", "Ebro", "Tagus", "Douro", "Guadalquivir", "Tiber",
+            "Arno", "Oder", "Vistula", "Dniester", "Drava", "Sava", "Tisza", "Prut",
+            "Ural", "Kama", "Oka", "Belaya", "Vyatka", "Neva", "Dvina", "Pechora",
+            "Mezen", "Onega", "Lena", "Yenisei", "Ob", "Irtysh", "Angara", "Tunguska",
+            "Shannon", "Severn", "Trent", "Mersey", "Clyde", "Tay", "Spey", "Tweed",
+            "Garonne", "Moselle"
+          ],
+
+          "Rivers of Asia": [
+            "Yangtze", "Yellow", "Mekong", "Ganges", "Brahmaputra", "Indus", "Irrawaddy", "Salween",
+            "Amur", "Lena", "Yenisei", "Ob", "Tigris", "Euphrates", "Jordan", "Amu Darya",
+            "Syr Darya", "Hari", "Helmand", "Kabul", "Sutlej", "Chenab", "Ravi", "Beas",
+            "Jhelum", "Godavari", "Krishna", "Kaveri", "Narmada", "Tapti", "Mahanadi", "Chao Phraya",
+            "Red River", "Pearl River", "Min River", "Hai River", "Huai River", "Han River",
+            "Yalu", "Tumen", "Ussuri", "Argun", "Songhua", "Liaohe", "Tarim", "Ili",
+            "Ural", "Kura", "Aras", "Sefid"
+          ],
+
+          "Norse Gods": [
+            "Odin", "Thor", "Loki", "Freya", "Frigg", "Baldur", "Tyr", "Heimdall",
+            "Bragi", "Idun", "Njord", "Skadi", "Ullr", "Forseti", "Vidar", "Vali",
+            "Hod", "Hermod", "Magni", "Modi", "Sif", "Freyja", "Frey", "Nanna",
+            "Sigyn", "Eir", "Gefjon", "Gna", "Hlin", "Lofn", "Snotra", "Syn",
+            "Var", "Vor", "Ran", "Aegir", "Jord", "Nott", "Dag", "Sol",
+            "Mani", "Ymir", "Audhumla", "Buri", "Bor", "Vili", "Ve", "Ask",
+            "Embla", "Norns", "Urd", "Verdandi", "Skuld", "Valkyries", "Hel", "Fenrir"
+          ],
+
+          "Egyptian Gods": [
+            "Ra", "Osiris", "Isis", "Horus", "Anubis", "Set", "Thoth", "Hathor",
+            "Bastet", "Sekhmet", "Ptah", "Sobek", "Khnum", "Amon", "Mut", "Khonsu",
+            "Nut", "Geb", "Shu", "Tefnut", "Nephthys", "Maat", "Bes", "Taweret",
+            "Serket", "Neith", "Wadjet", "Nekhbet", "Montu", "Atum", "Khepri", "Apophis",
+            "Ammit", "Aker", "Bennu", "Heqet", "Meretseger", "Min", "Nefertem", "Pakhet",
+            "Renenutet", "Satet", "Seshat", "Sobek", "Wepwawet", "Ammut", "Hapi", "Imhotep",
+            "Sekhemib", "Qebehsenuef"
+          ],
+
+          "Sculptors": [
+            "Michelangelo", "Rodin", "Donatello", "Bernini", "Phidias", "Praxiteles", "Myron", "Polykleitos",
+            "Canova", "Houdon", "Cellini", "Giambologna", "Ghiberti", "Verrocchio", "Moore", "Brancusi",
+            "Giacometti", "Calder", "Bourgeois", "Hepworth", "Noguchi", "Smith", "Nevelson", "Serra",
+            "Kapoor", "Gormley", "Koons", "Hirst", "Maillol", "Degas",
+            "Renoir", "Matisse", "Picasso", "Arp", "Duchamp", "Boccioni", "Archipenko", "Lipchitz",
+            "Zadkine", "Laurens", "Gonzalez", "Richier", "Marini", "Manzu", "Wotruba", "Chadwick",
+            "Oldenburg", "Judd", "Andre", "LeWitt"
+          ],
+
+          "Photographers": [
+            "Ansel Adams", "Dorothea Lange", "Henri Cartier-Bresson", "Robert Capa", "Annie Leibovitz",
+            "Richard Avedon", "Irving Penn", "Diane Arbus", "Robert Mapplethorpe", "Cindy Sherman",
+            "Sally Mann", "Gordon Parks", "Walker Evans", "Alfred Stieglitz", "Edward Weston",
+            "Imogen Cunningham", "Margaret Bourke-White", "W. Eugene Smith", "Robert Frank", "Garry Winogrand",
+            "Lee Friedlander", "Joel Meyerowitz", "William Eggleston", "Stephen Shore", "Nan Goldin",
+            "Andreas Gursky", "Thomas Struth", "Candida Höfer", "Thomas Ruff", "Jeff Wall",
+            "Gregory Crewdson", "Philip-Lorca diCorcia", "Alec Soth", "Ryan McGinley", "Wolfgang Tillmans",
+            "Rineke Dijkstra", "Hiroshi Sugimoto", "Shirin Neshat", "Sebastião Salgado", "Steve McCurry",
+            "Vivian Maier", "Man Ray", "Edward Steichen", "Paul Strand", "Minor White", "Berenice Abbott",
+            "Weegee", "Brassaï", "Elliott Erwitt", "Mary Ellen Mark"
+          ],
+
+          "Architects": [
+            "Frank Lloyd Wright", "Le Corbusier", "Mies van der Rohe", "Walter Gropius", "Frank Gehry",
+            "Zaha Hadid", "Norman Foster", "Renzo Piano", "I.M. Pei", "Louis Kahn",
+            "Philip Johnson", "Richard Meier", "Robert Venturi", "Michael Graves", "Peter Eisenman",
+            "Rem Koolhaas", "Herzog & de Meuron", "Jean Nouvel", "Santiago Calatrava", "Tadao Ando",
+            "Kenzo Tange", "Toyo Ito", "SANAA", "Shigeru Ban", "Kengo Kuma",
+            "Oscar Niemeyer", "Paulo Mendes da Rocha", "Lina Bo Bardi", "Luis Barragán", "Ricardo Legorreta",
+            "Antoni Gaudí", "Alvar Aalto", "Jørn Utzon", "Arne Jacobsen", "Gunnar Asplund",
+            "Edwin Lutyens", "Charles Rennie Mackintosh", "Otto Wagner", "Josef Hoffmann", "Adolf Loos",
+            "Peter Behrens", "Bruno Taut", "Erich Mendelsohn", "Hans Scharoun", "Frei Otto",
+            "Bjarke Ingels", "David Chipperfield", "Thomas Heatherwick", "Peter Zumthor", "Balkrishna Doshi"
+          ],
+
+          "Jazz Musicians": [
+            "Louis Armstrong", "Duke Ellington", "Charlie Parker", "Miles Davis", "John Coltrane",
+            "Dizzy Gillespie", "Thelonious Monk", "Billie Holiday", "Ella Fitzgerald", "Sarah Vaughan",
+            "Count Basie", "Benny Goodman", "Coleman Hawkins", "Lester Young", "Art Blakey",
+            "Max Roach", "Charles Mingus", "Ornette Coleman", "Sonny Rollins", "Stan Getz",
+            "Chet Baker", "Bill Evans", "Oscar Peterson", "Dave Brubeck", "Herbie Hancock",
+            "Wayne Shorter", "McCoy Tyner", "Keith Jarrett", "Chick Corea", "Pat Metheny",
+            "John McLaughlin", "Jaco Pastorius", "Weather Report", "Mahavishnu Orchestra", "Return to Forever",
+            "Nina Simone", "Dinah Washington", "Anita O'Day", "Carmen McRae", "Betty Carter",
+            "Abbey Lincoln", "Cassandra Wilson", "Dianne Reeves", "Esperanza Spalding", "Cecile McLorin Salvant",
+            "Django Reinhardt", "Wes Montgomery", "Joe Pass", "Jim Hall", "Grant Green"
+          ],
+
+          "Rock Bands": [
+            "Beatles", "Rolling Stones", "Led Zeppelin", "Pink Floyd", "Queen", "The Who",
+            "Eagles", "Fleetwood Mac", "Aerosmith", "AC/DC", "Van Halen", "Guns N' Roses",
+            "Metallica", "Nirvana", "Pearl Jam", "Soundgarden", "Alice in Chains", "Red Hot Chili Peppers",
+            "Foo Fighters", "Green Day", "Blink-182", "The Offspring", "Weezer", "Radiohead",
+            "U2", "R.E.M.", "The Cure", "The Smiths", "Depeche Mode", "New Order",
+            "The Police", "Genesis", "Yes", "Rush", "Deep Purple", "Black Sabbath",
+            "Iron Maiden", "Judas Priest", "Motörhead", "Slayer", "Megadeth", "Anthrax",
+            "Pantera", "Tool", "System of a Down", "Rage Against the Machine", "Linkin Park", "Korn",
+            "Deftones", "Incubus", "The Strokes", "The White Stripes", "Arctic Monkeys", "Muse",
+            "Coldplay", "Oasis", "Blur", "Pulp", "The Verve", "Stone Temple Pilots", "Creed"
+          ],
+
+          "Soccer Clubs": [
+            "Real Madrid", "Barcelona", "Manchester United", "Liverpool", "Bayern Munich", "Juventus",
+            "AC Milan", "Inter Milan", "Chelsea", "Arsenal", "Manchester City", "Tottenham", "Paris Saint-Germain",
+            "Borussia Dortmund", "Ajax", "Benfica", "Porto", "Celtic", "Rangers", "Galatasaray",
+            "Fenerbahçe", "CSKA Moscow", "Spartak Moscow", "Shakhtar Donetsk", "Dynamo Kyiv", "Anderlecht",
+            "Club Brugge", "PSV", "Feyenoord", "Atletico Madrid", "Sevilla", "Valencia", "Athletic Bilbao",
+            "Napoli", "Roma", "Lazio", "Fiorentina", "Atalanta", "Lyon", "Marseille", "Monaco",
+            "Lille", "Bayer Leverkusen", "Schalke", "Wolfsburg", "RB Leipzig", "Sporting CP", "Braga",
+            "Eintracht Frankfurt", "AS Saint-Étienne"
+          ],
+
+          "Types of Tea": [
+            "Green Tea", "Black Tea", "White Tea", "Oolong", "Pu-erh", "Yellow Tea", "Jasmine",
+            "Earl Grey", "English Breakfast", "Irish Breakfast", "Darjeeling", "Assam", "Ceylon",
+            "Lapsang Souchong", "Keemun", "Dragon Well", "Gyokuro", "Sencha", "Matcha", "Genmaicha",
+            "Hojicha", "Kukicha", "Bancha", "Shincha", "Tencha", "Kabusecha", "Tamaryokucha", "Konacha",
+            "Mecha", "Aracha", "Fukamushicha", "Benifuuki", "Yabukita", "Gokou", "Kanayamidori", "Okumidori",
+            "Saemidori", "Asatsuyu", "Sayamakaori", "Tsuyuhikari", "Yamatomidori", "Zairai", "Chamomile", "Peppermint",
+            "Rooibos", "Hibiscus", "Lavender", "Lemon Balm", "Ginger", "Turmeric", "Chai", "Masala Chai"
+          ],
+
+          "Types of Wine": [
+            "Cabernet Sauvignon", "Merlot", "Pinot Noir", "Syrah", "Shiraz", "Malbec", "Zinfandel",
+            "Chardonnay", "Sauvignon Blanc", "Riesling", "Pinot Grigio", "Pinot Gris", "Gewürztraminer",
+            "Viognier", "Chenin Blanc", "Sémillon", "Moscato", "Prosecco", "Champagne", "Cava",
+            "Sangiovese", "Nebbiolo", "Barbera", "Dolcetto", "Primitivo", "Nero d'Avola", "Montepulciano",
+            "Grenache", "Mourvèdre", "Cinsault", "Carignan", "Tempranillo", "Garnacha", "Albariño",
+            "Verdejo", "Godello", "Mencía", "Monastrell", "Bobal", "Touriga Nacional", "Baga",
+            "Aragonez", "Trincadeira", "Arinto", "Alvarinho", "Pinotage", "Colombard", "Carménère", "Petite Sirah", "Mouvedre"
+          ],
+
+          "Types of Beer": [
+            "Lager", "Pilsner", "Pale Ale", "IPA", "Stout", "Porter", "Wheat Beer", "Hefeweizen",
+            "Witbier", "Saison", "Belgian Ale", "Dubbel", "Tripel", "Quadrupel", "Amber Ale", "Brown Ale",
+            "Red Ale", "Barleywine", "Imperial Stout", "Milk Stout", "Oatmeal Stout", "Dry Stout",
+            "Blonde Ale", "Cream Ale", "Kölsch", "Altbier", "Bock", "Doppelbock", "Maibock",
+            "Dunkel", "Schwarzbier", "Rauchbier", "Gose", "Berliner Weisse", "Lambic", "Gueuze",
+            "Kriek", "Framboise", "Flanders Red", "Oud Bruin", "Scotch Ale", "Wee Heavy", "Irish Red",
+            "ESB", "Bitter", "Mild", "Session IPA", "Double IPA", "Triple IPA", "Hazy IPA"
+          ],
+
+          "Breakfast Foods": [
+            "Pancakes", "Waffles", "French Toast", "Eggs", "Bacon", "Sausage", "Hash Browns", "Toast",
+            "Bagel", "Muffin", "Croissant", "Danish", "Scone", "Biscuit", "Oatmeal", "Cereal",
+            "Granola", "Yogurt", "Fruit", "Smoothie", "Omelet", "Frittata", "Quiche", "Benedict",
+            "Scrambled", "Poached", "Fried", "Boiled", "Crepes", "Blintzes", "Strudel", "Turnover",
+            "Coffee Cake", "Cinnamon Roll", "Donut", "Bear Claw", "Apple Fritter", "Churro",
+            "Grits", "Polenta", "Porridge", "Congee", "Pozole", "Chilaquiles", "Huevos Rancheros", "Migas",
+            "Shakshuka", "Menemen", "Full English", "Kedgeree", "Kippers", "Black Pudding", "Beans on Toast"
+          ],
+
+          "Desserts": [
+            "Cake", "Pie", "Cookie", "Brownie", "Cupcake", "Macaron", "Éclair", "Profiterole",
+            "Tart", "Cheesecake", "Tiramisu", "Panna Cotta", "Crème Brûlée", "Flan", "Custard", "Pudding",
+            "Mousse", "Soufflé", "Pavlova", "Meringue", "Macaroon", "Biscotti", "Cannoli", "Sfogliatelle",
+            "Baklava", "Knafeh", "Halva", "Turkish Delight", "Mochi", "Dorayaki", "Taiyaki", "Dango",
+            "Wagashi", "Daifuku", "Anmitsu", "Zenzai", "Mitarashi", "Sakuramochi", "Kashiwamochi", "Kuzumochi",
+            "Monaka", "Yokan", "Karukan", "Uiro", "Namagashi", "Higashi", "Konpeito", "Senbei",
+            "Ice Cream", "Gelato", "Sorbet", "Sherbet", "Frozen Yogurt", "Sundae", "Parfait", "Milkshake"
+          ],
+
+          "Famous Novels": [
+            "Pride and Prejudice", "1984", "To Kill a Mockingbird", "The Great Gatsby", "Moby Dick",
+            "War and Peace", "Crime and Punishment", "The Brothers Karamazov", "Anna Karenina", "Madame Bovary",
+            "Don Quixote", "One Hundred Years of Solitude", "The Catcher in the Rye", "Brave New World",
+            "Fahrenheit 451", "Lord of the Flies", "Animal Farm", "Slaughterhouse-Five", "Catch-22",
+            "The Sound and the Fury", "Absalom Absalom", "Light in August", "As I Lay Dying", "Beloved",
+            "The Color Purple", "Invisible Man", "Native Son", "Their Eyes Were Watching God", "The Grapes of Wrath",
+            "Of Mice and Men", "East of Eden", "Cannery Row", "The Pearl", "The Old Man and the Sea",
+            "For Whom the Bell Tolls", "A Farewell to Arms", "The Sun Also Rises", "Ulysses", "Finnegans Wake",
+            "A Portrait of the Artist", "Dubliners", "Mrs Dalloway", "To the Lighthouse", "The Waves",
+            "Wuthering Heights", "Jane Eyre", "Middlemarch", "Bleak House", "Great Expectations", "David Copperfield"
+          ],
+
+          "Poets": [
+            "William Shakespeare", "Emily Dickinson", "Walt Whitman", "Robert Frost", "T.S. Eliot",
+            "Ezra Pound", "William Carlos Williams", "Wallace Stevens", "E.E. Cummings", "Langston Hughes",
+            "Maya Angelou", "Gwendolyn Brooks", "Rita Dove", "Sylvia Plath", "Anne Sexton",
+            "Robert Lowell", "Elizabeth Bishop", "John Ashbery", "W.H. Auden", "Dylan Thomas",
+            "William Wordsworth", "Samuel Taylor Coleridge", "Lord Byron", "Percy Shelley", "John Keats",
+            "Alfred Tennyson", "Robert Browning", "Gerard Manley Hopkins", "W.B. Yeats", "Seamus Heaney",
+            "Ted Hughes", "Philip Larkin", "Charles Baudelaire", "Arthur Rimbaud", "Paul Verlaine",
+            "Stéphane Mallarmé", "Guillaume Apollinaire", "Pablo Neruda", "Federico García Lorca", "Octavio Paz",
+            "Dante Alighieri", "Petrarch", "Eugenio Montale", "Giuseppe Ungaretti", "Salvatore Quasimodo",
+            "Rainer Maria Rilke", "Paul Celan", "Anna Akhmatova", "Marina Tsvetaeva", "Osip Mandelstam"
+          ],
+
+          "Children's Books": [
+            "Where the Wild Things Are", "The Very Hungry Caterpillar", "Goodnight Moon", "Green Eggs and Ham",
+            "The Cat in the Hat", "Charlotte's Web", "Stuart Little", "The Giving Tree", "Chicka Chicka Boom Boom",
+            "Brown Bear Brown Bear", "If You Give a Mouse a Cookie", "Corduroy", "Curious George",
+            "Madeline", "The Tale of Peter Rabbit", "Winnie-the-Pooh", "Alice in Wonderland", "The Wizard of Oz",
+            "The Chronicles of Narnia", "Harry Potter", "Percy Jackson", "The Hunger Games", "Divergent",
+            "The Fault in Our Stars", "Wonder", "Holes", "Bridge to Terabithia", "Hatchet",
+            "Number the Stars", "The Giver", "Island of the Blue Dolphins", "Tuck Everlasting", "A Wrinkle in Time",
+            "Matilda", "James and the Giant Peach", "Charlie and the Chocolate Factory", "The BFG",
+            "Fantastic Mr. Fox", "The Witches", "Danny the Champion", "Roald Dahl", "Dr. Seuss",
+            "Maurice Sendak", "Eric Carle", "Beatrix Potter", "A.A. Milne", "E.B. White", "Shel Silverstein",
+            "The Lorax", "Oh the Places You'll Go"
+          ],
+
+          "Cat Breeds": [
+            "Persian", "Maine Coon", "Siamese", "Ragdoll", "Bengal", "Abyssinian", "Birman", "Oriental",
+            "Sphynx", "Devon Rex", "Cornish Rex", "American Shorthair", "British Shorthair", "Scottish Fold",
+            "Exotic Shorthair", "Burmese", "Tonkinese", "Russian Blue", "Norwegian Forest", "Siberian",
+            "Turkish Angora", "Turkish Van", "Somali", "Ocicat", "Egyptian Mau", "Manx",
+            "Bombay", "Chartreux", "Havana Brown", "Korat", "Balinese", "Javanese",
+            "Ragamuffin", "Selkirk Rex", "LaPerm", "American Curl", "American Bobtail", "Japanese Bobtail",
+            "Munchkin", "Singapura", "Snowshoe", "Himalayan", "Colorpoint Shorthair", "Savannah",
+            "Chausie", "Pixiebob", "Toyger", "Nebelung", "York Chocolate", "Sokoke",
+            "Khao Manee", "Burmilla", "Asian", "Tiffanie", "Peterbald", "Donskoy",
+            "Kurilian Bobtail", "Mekong Bobtail", "Cyprus", "Aegean", "Anatoli", "Aphrodite"
+          ],
+
+          "Birds": [
+            "Robin", "Sparrow", "Cardinal", "Blue Jay", "Crow", "Raven", "Magpie", "Starling",
+            "Blackbird", "Thrush", "Wren", "Finch", "Goldfinch", "Canary", "Warbler", "Swallow",
+            "Swift", "Hummingbird", "Woodpecker", "Nuthatch", "Chickadee", "Titmouse", "Kingfisher", "Heron",
+            "Egret", "Stork", "Crane", "Ibis", "Spoonbill", "Flamingo", "Pelican", "Cormorant",
+            "Gannet", "Albatross", "Petrel", "Shearwater", "Gull", "Tern", "Skua", "Auk",
+            "Puffin", "Murre", "Guillemot", "Razorbill", "Duck", "Goose", "Swan", "Mallard",
+            "Teal", "Widgeon", "Pintail", "Shoveler", "Merganser", "Grebe", "Loon", "Coot",
+            "Rail", "Moorhen", "Gallinule", "Sandpiper", "Plover", "Curlew", "Godwit", "Turnstone"
+          ],
+
+          "Fish": [
+            "Salmon", "Trout", "Bass", "Pike", "Perch", "Walleye", "Catfish", "Carp",
+            "Goldfish", "Koi", "Guppy", "Molly", "Platy", "Swordtail", "Tetra", "Barb",
+            "Danio", "Rasbora", "Loach", "Gourami", "Betta", "Angelfish", "Discus", "Oscar",
+            "Cichlid", "Pleco", "Corydoras", "Otocinclus", "Snakehead", "Arowana", "Puffer", "Gar",
+            "Sturgeon", "Paddlefish", "Bowfin", "Eel", "Moray", "Conger", "Lamprey", "Hagfish",
+            "Shark", "Ray", "Skate", "Sawfish", "Guitarfish", "Chimaera", "Tuna", "Mackerel",
+            "Bonito", "Wahoo", "Barracuda", "Swordfish", "Marlin", "Sailfish", "Mahi Mahi", "Grouper",
+            "Snapper", "Pompano", "Permit", "Tarpon", "Bonefish", "Mullet", "Flounder", "Halibut"
+          ],
+
+          "Insects": [
+            "Ant", "Bee", "Wasp", "Hornet", "Fly", "Mosquito", "Gnat", "Midge",
+            "Beetle", "Ladybug", "Firefly", "Weevil", "Borer", "Butterfly", "Moth", "Caterpillar",
+            "Dragonfly", "Damselfly", "Mayfly", "Stonefly", "Caddisfly", "Grasshopper", "Cricket", "Katydid",
+            "Locust", "Mantis", "Stick Insect", "Leaf Insect", "Cockroach", "Termite", "Earwig", "Silverfish",
+            "Louse", "Flea", "Tick", "Mite", "Aphid", "Scale", "Whitefly", "Mealybug",
+            "Thrips", "Psyllid", "Cicada", "Leafhopper", "Planthopper", "Treehopper", "Spittlebug", "Assassin Bug",
+            "Stink Bug", "Shield Bug", "Water Strider", "Backswimmer", "Water Boatman", "Giant Water Bug",
+            "Dobsonfly", "Antlion", "Lacewing", "Scorpionfly", "Hangingfly", "Snakefly", "Alderfly", "Fishfly"
+          ],
+
+          "Diseases": [
+            "Influenza", "Pneumonia", "Tuberculosis", "Malaria", "Dengue", "Yellow Fever", "Typhoid", "Cholera",
+            "Measles", "Mumps", "Rubella", "Chickenpox", "Smallpox", "Polio", "Rabies", "Tetanus",
+            "Diphtheria", "Pertussis", "Meningitis", "Encephalitis", "Hepatitis", "HIV", "AIDS", "Ebola",
+            "Marburg", "Lassa Fever", "Hantavirus", "West Nile", "Zika", "Chikungunya", "SARS", "MERS",
+            "COVID-19", "Anthrax", "Plague", "Tularemia", "Brucellosis", "Listeriosis", "Salmonella", "E. Coli",
+            "Botulism", "Campylobacter", "Giardia", "Cryptosporidium", "Toxoplasmosis", "Trichinosis", "Tapeworm", "Roundworm",
+            "Hookworm", "Pinworm", "Schistosomiasis", "Filariasis", "Onchocerciasis", "Leishmaniasis", "Trypanosomiasis", "Chagas",
+            "Leprosy", "Syphilis", "Gonorrhea", "Chlamydia", "Herpes", "HPV", "Candidiasis", "Ringworm"
+          ],
+
+          "Technology Companies": [
+            "Apple", "Microsoft", "Google", "Amazon", "Facebook", "Meta", "Tesla", "Netflix",
+            "Adobe", "Oracle", "Salesforce", "Intel", "AMD", "NVIDIA", "Qualcomm", "Broadcom",
+            "IBM", "Cisco", "Dell", "HP", "Lenovo", "ASUS", "Acer", "Samsung",
+            "LG", "Sony", "Panasonic", "Toshiba", "Fujitsu", "NEC", "Hitachi", "Sharp",
+            "Canon", "Nikon", "Olympus", "Fujifilm", "Epson", "Brother", "Xerox", "Ricoh",
+            "SAP", "VMware", "Symantec", "McAfee", "Norton", "Trend Micro", "Kaspersky", "Avast",
+            "Twitter", "LinkedIn", "Snapchat", "TikTok", "Uber", "Lyft", "Airbnb", "SpaceX",
+            "Palantir", "Stripe", "Square", "PayPal", "Shopify", "Zoom", "Slack", "Dropbox"
+          ],
+
+          "Furniture": [
+            "Chair", "Table", "Sofa", "Couch", "Loveseat", "Sectional", "Ottoman", "Bench",
+            "Stool", "Recliner", "Armchair", "Wingback", "Chaise", "Futon", "Daybed", "Bed",
+            "Bunk Bed", "Canopy Bed", "Four-Poster", "Platform Bed", "Murphy Bed", "Trundle", "Crib", "Cradle",
+            "Bassinet", "Dresser", "Chest", "Armoire", "Wardrobe", "Nightstand", "Vanity", "Desk",
+            "Bureau", "Credenza", "Hutch", "Sideboard", "Buffet", "Cabinet", "Bookcase", "Shelving",
+            "Étagère", "Console", "Coffee Table", "End Table", "Side Table", "Nesting Tables", "TV Stand",
+            "Entertainment Center", "Bar Cart", "Wine Rack", "Coat Rack", "Hall Tree", "Umbrella Stand",
+            "Magazine Rack", "Shoe Rack", "Ladder", "Stepstool", "Hamper", "Trunk", "Hope Chest", "Blanket Chest"
+          ],
+
+          "Kitchen Appliances": [
+            "Refrigerator", "Freezer", "Oven", "Stove", "Range", "Cooktop", "Microwave", "Toaster",
+            "Toaster Oven", "Blender", "Food Processor", "Mixer", "Stand Mixer", "Hand Mixer", "Immersion Blender",
+            "Coffee Maker", "Espresso Machine", "French Press", "Pour Over", "Percolator", "Kettle",
+            "Electric Kettle", "Tea Kettle", "Slow Cooker", "Pressure Cooker", "Instant Pot", "Rice Cooker",
+            "Air Fryer", "Deep Fryer", "Waffle Maker", "Pancake Griddle", "Sandwich Maker", "Panini Press",
+            "Grill", "Griddle", "Steamer", "Juicer", "Citrus Juicer", "Meat Grinder", "Pasta Maker",
+            "Bread Maker", "Ice Cream Maker", "Yogurt Maker", "Dehydrator", "Sous Vide", "Rotisserie",
+            "Can Opener", "Knife Sharpener", "Food Scale", "Kitchen Scale", "Thermometer", "Timer",
+            "Dishwasher", "Garbage Disposal", "Compactor", "Wine Cooler", "Beverage Center", "Ice Maker"
+          ],
+
+          "Clothing Items": [
+            "Shirt", "Blouse", "T-Shirt", "Tank Top", "Sweater", "Cardigan", "Hoodie", "Sweatshirt",
+            "Jacket", "Coat", "Blazer", "Vest", "Poncho", "Cape", "Shawl", "Wrap",
+            "Pants", "Jeans", "Trousers", "Slacks", "Chinos", "Khakis", "Leggings", "Tights",
+            "Shorts", "Skirt", "Dress", "Gown", "Robe", "Kimono", "Sari", "Sarong",
+            "Suit", "Tuxedo", "Jumpsuit", "Romper", "Overalls", "Coveralls", "Uniform", "Scrubs",
+            "Socks", "Stockings", "Pantyhose", "Underwear", "Boxers", "Briefs", "Bra", "Camisole",
+            "Slip", "Nightgown", "Pajamas", "Bathrobe", "Swimsuit", "Bikini", "Trunks", "Wetsuit",
+            "Gloves", "Mittens", "Scarf", "Hat", "Cap", "Beanie", "Beret", "Fedora"
+          ],
+
+          "Emotions": [
+            "Joy", "Happiness", "Delight", "Elation", "Euphoria", "Bliss", "Contentment", "Satisfaction",
+            "Love", "Affection", "Adoration", "Passion", "Desire", "Longing", "Yearning", "Fondness",
+            "Sadness", "Sorrow", "Grief", "Melancholy", "Despair", "Anguish", "Heartache", "Misery",
+            "Anger", "Rage", "Fury", "Wrath", "Irritation", "Annoyance", "Frustration", "Exasperation",
+            "Fear", "Terror", "Horror", "Dread", "Anxiety", "Worry", "Nervousness", "Apprehension",
+            "Surprise", "Astonishment", "Amazement", "Shock", "Wonder", "Awe", "Bewilderment", "Confusion",
+            "Disgust", "Revulsion", "Loathing", "Contempt", "Scorn", "Disdain", "Shame", "Guilt",
+            "Pride", "Confidence", "Triumph", "Hope", "Optimism", "Excitement", "Anticipation", "Eagerness"
+          ],
+
+          "Weather Phenomena": [
+            "Rain", "Snow", "Sleet", "Hail", "Drizzle", "Mist", "Fog", "Frost",
+            "Dew", "Ice", "Rime", "Graupel", "Thunder", "Lightning", "Wind", "Breeze",
+            "Gale", "Hurricane", "Typhoon", "Cyclone", "Tornado", "Twister", "Waterspout", "Dust Devil",
+            "Blizzard", "Snowstorm", "Ice Storm", "Freezing Rain", "Thunderstorm", "Squall", "Downburst", "Microburst",
+            "Heatwave", "Drought", "Wildfire", "Sandstorm", "Haboob", "Dust Storm", "Whirlwind", "Derecho",
+            "Monsoon", "Flood", "Flash Flood", "Cloudburst", "Rainbow", "Halo", "Sun Dog", "Moon Dog",
+            "Aurora", "Northern Lights", "Southern Lights", "St. Elmo's Fire", "Ball Lightning", "Sheet Lightning",
+            "Heat Lightning", "Virga", "Mammatus", "Lenticular", "Cumulonimbus", "Nimbostratus", "Stratus", "Cumulus"
+          ],
+
+          "Metals": [
+            "Gold", "Silver", "Copper", "Iron", "Steel", "Aluminum", "Tin", "Lead",
+            "Zinc", "Nickel", "Platinum", "Palladium", "Rhodium", "Iridium", "Osmium", "Ruthenium",
+            "Titanium", "Chromium", "Manganese", "Cobalt", "Tungsten", "Molybdenum", "Vanadium", "Tantalum",
+            "Niobium", "Zirconium", "Hafnium", "Rhenium", "Technetium", "Mercury", "Cadmium", "Bismuth",
+            "Antimony", "Arsenic", "Selenium", "Tellurium", "Polonium", "Thallium", "Indium", "Gallium",
+            "Germanium", "Beryllium", "Magnesium", "Calcium", "Strontium", "Barium", "Radium", "Lithium",
+            "Sodium", "Potassium", "Rubidium", "Cesium", "Francium", "Uranium", "Plutonium", "Thorium",
+            "Neptunium", "Americium", "Curium", "Berkelium", "Californium", "Einsteinium", "Fermium", "Mendelevium"
+          ],
+
+          "Units of Measurement": [
+            "Meter", "Kilometer", "Centimeter", "Millimeter", "Inch", "Foot", "Yard", "Mile",
+            "Fathom", "Furlong", "League", "Nautical Mile", "Light Year", "Parsec", "Angstrom", "Micron",
+            "Gram", "Kilogram", "Milligram", "Ton", "Metric Ton", "Ounce", "Pound", "Stone",
+            "Liter", "Milliliter", "Gallon", "Quart", "Pint", "Cup", "Fluid Ounce", "Tablespoon",
+            "Teaspoon", "Barrel", "Hogshead", "Peck", "Bushel", "Acre", "Hectare", "Square Meter",
+            "Square Foot", "Square Mile", "Second", "Minute", "Hour", "Day", "Week", "Month",
+            "Year", "Decade", "Century", "Millennium", "Fortnight", "Kelvin", "Celsius", "Fahrenheit",
+            "Pascal", "Bar", "Atmosphere", "Torr", "PSI", "Newton", "Joule", "Watt", "Volt"
+          ],
+
+          "Tools": [
+            "Hammer", "Screwdriver", "Wrench", "Pliers", "Saw", "Drill", "Chisel", "Plane",
+            "File", "Rasp", "Sandpaper", "Level", "Square", "Ruler", "Tape Measure", "Caliper",
+            "Vise", "Clamp", "Anvil", "Mallet", "Crowbar", "Pry Bar", "Sledgehammer", "Pickaxe",
+            "Shovel", "Spade", "Hoe", "Rake", "Pitchfork", "Axe", "Hatchet", "Machete",
+            "Chainsaw", "Circular Saw", "Jigsaw", "Hacksaw", "Handsaw", "Crosscut Saw", "Rip Saw",
+            "Miter Saw", "Table Saw", "Band Saw", "Scroll Saw", "Reciprocating Saw", "Router", "Lathe",
+            "Grinder", "Sander", "Polisher", "Welder", "Soldering Iron", "Blowtorch", "Heat Gun",
+            "Stapler", "Rivet Gun", "Nail Gun", "Paint Sprayer", "Caulk Gun", "Glue Gun", "Trowel"
+          ],
+
+          "Fabrics": [
+            "Cotton", "Linen", "Wool", "Silk", "Cashmere", "Mohair", "Alpaca", "Angora",
+            "Polyester", "Nylon", "Rayon", "Acrylic", "Spandex", "Lycra", "Elastane", "Fleece",
+            "Denim", "Canvas", "Corduroy", "Velvet", "Velour", "Suede", "Leather", "Satin",
+            "Chiffon", "Organza", "Tulle", "Taffeta", "Brocade", "Damask", "Jacquard", "Tweed",
+            "Flannel", "Chambray", "Muslin", "Calico", "Poplin", "Broadcloth", "Oxford", "Voile",
+            "Gauze", "Cheesecloth", "Burlap", "Jute", "Hemp", "Bamboo", "Modal", "Tencel",
+            "Microfiber", "Terry Cloth", "Chenille", "Bouclé", "Crepe", "Georgette", "Charmeuse",
+            "Faille", "Grosgrain", "Ottoman", "Piqué", "Seersucker", "Gingham", "Houndstooth", "Plaid"
+          ],
+
+          "Gemstones and Minerals": [
+            "Diamond", "Ruby", "Sapphire", "Emerald", "Amethyst", "Topaz", "Garnet", "Opal",
+            "Pearl", "Turquoise", "Jade", "Onyx", "Aquamarine", "Peridot", "Tanzanite", "Alexandrite",
+            "Citrine", "Tourmaline", "Spinel", "Zircon", "Moonstone", "Sunstone", "Labradorite", "Lapis Lazuli",
+            "Malachite", "Azurite", "Chrysocolla", "Jasper", "Agate", "Carnelian", "Chalcedony", "Bloodstone",
+            "Tiger's Eye", "Cat's Eye", "Aventurine", "Amazonite", "Sodalite", "Rhodonite", "Chrysoprase",
+            "Fluorite", "Quartz", "Rose Quartz", "Smoky Quartz", "Obsidian", "Hematite", "Pyrite",
+            "Calcite", "Dolomite", "Aragonite", "Gypsum", "Halite", "Barite", "Celestite", "Fluorite",
+            "Apatite", "Beryl", "Corundum", "Feldspar", "Mica", "Talc", "Serpentine", "Olivine"
+          ],
+
+          "Dances from Around the World": [
+            "Ballet", "Jazz", "Tap", "Modern", "Contemporary", "Hip Hop", "Breakdancing", "Popping",
+            "Salsa", "Bachata", "Merengue", "Cumbia", "Tango", "Waltz", "Foxtrot", "Quickstep",
+            "Flamenco", "Irish Step", "Clogging", "Belly Dance", "Hula", "Tahitian", "Bollywood", "Bhangra",
+            "Capoeira", "Samba", "Bossa Nova", "Rumba", "Cha-cha", "Mambo", "Jive", "Swing",
+            "Lindy Hop", "Charleston", "Jitterbug", "Polka", "Mazurka", "Polonaise", "Tarantella", "Hopak",
+            "Csardas", "Fandango", "Sardana", "Jota", "Seguidilla", "Bambuco", "Joropo", "Cueca",
+            "Marinera", "Zamba", "Chacarera", "Malambo", "Gato", "Candombe", "Milonga", "Vals", "Chotis"
+          ],
+
+          "Famous Battles": [
+            "Marathon", "Thermopylae", "Salamis", "Plataea", "Cannae", "Zama", "Pharsalus", "Actium",
+            "Teutoburg Forest", "Adrianople", "Chalons", "Tours", "Hastings", "Crécy", "Poitiers", "Agincourt",
+            "Orleans", "Constantinople", "Lepanto", "Armada", "Naseby", "Blenheim", "Poltava", "Plassey",
+            "Quebec", "Bunker Hill", "Saratoga", "Yorktown", "Trafalgar", "Austerlitz", "Jena", "Leipzig",
+            "Waterloo", "Gettysburg", "Antietam", "Chancellorsville", "Vicksburg", "Chickamauga", "Atlanta", "Appomattox",
+            "Verdun", "Somme", "Marne", "Tannenberg", "Jutland", "Gallipoli", "Isonzo", "Caporetto",
+            "Stalingrad", "Kursk", "Moscow", "Leningrad", "El Alamein", "Tobruk", "Midway", "Guadalcanal",
+            "Coral Sea", "Iwo Jima", "Okinawa", "Normandy", "Bulge", "Berlin", "Inchon", "Dien Bien Phu"
+          ],
+
+          "Philosophies and Beliefs": [
+            "Existentialism", "Nihilism", "Absurdism", "Stoicism", "Epicureanism", "Cynicism", "Skepticism", "Pragmatism",
+            "Rationalism", "Empiricism", "Idealism", "Materialism", "Dualism", "Monism", "Pluralism", "Relativism",
+            "Absolutism", "Determinism", "Libertarianism", "Compatibilism", "Utilitarianism", "Deontology", "Virtue Ethics",
+            "Buddhism", "Hinduism", "Taoism", "Confucianism", "Shintoism", "Judaism", "Christianity", "Islam",
+            "Sikhism", "Jainism", "Zoroastrianism", "Baha'i", "Animism", "Shamanism", "Paganism", "Wicca",
+            "Atheism", "Agnosticism", "Theism", "Deism", "Pantheism", "Panentheism", "Polytheism", "Monotheism",
+            "Humanism", "Naturalism", "Transcendentalism", "Romanticism", "Realism", "Modernism", "Postmodernism", "Structuralism",
+            "Post-Structuralism", "Feminism", "Marxism", "Capitalism", "Socialism", "Anarchism", "Fascism", "Liberalism"
+          ],
+
+          "Musical Terms": [
+            "Allegro", "Andante", "Adagio", "Presto", "Largo", "Moderato", "Vivace", "Lento",
+            "Forte", "Piano", "Mezzo", "Crescendo", "Decrescendo", "Diminuendo", "Fortissimo", "Pianissimo",
+            "Staccato", "Legato", "Tenuto", "Marcato", "Accent", "Sforzando", "Fermata", "Ritardando",
+            "Accelerando", "Rubato", "Tremolo", "Vibrato", "Glissando", "Portamento", "Arpeggio", "Ostinato",
+            "Cadenza", "Coda", "Da Capo", "Dal Segno", "Fine", "Repeat", "Volta", "Measure",
+            "Bar", "Rest", "Note", "Chord", "Scale", "Interval", "Octave", "Fifth",
+            "Third", "Seventh", "Major", "Minor", "Augmented", "Diminished", "Perfect", "Consonance",
+            "Dissonance", "Harmony", "Melody", "Rhythm", "Tempo", "Beat", "Meter", "Syncopation"
+          ],
+
+          "Branches of Science": [
+            "Physics", "Chemistry", "Biology", "Astronomy", "Geology", "Meteorology", "Oceanography", "Ecology",
+            "Zoology", "Botany", "Genetics", "Biochemistry", "Microbiology", "Physiology", "Anatomy", "Neuroscience",
+            "Psychology", "Sociology", "Anthropology", "Archaeology", "Economics", "Political Science", "Geography",
+            "Mathematics", "Statistics", "Computer Science", "Engineering", "Medicine", "Pharmacy", "Veterinary Science",
+            "Agriculture", "Forestry", "Environmental Science", "Earth Science", "Planetary Science", "Cosmology",
+            "Astrophysics", "Geophysics", "Biophysics", "Nuclear Physics", "Quantum Physics", "Thermodynamics",
+            "Mechanics", "Optics", "Acoustics", "Electromagnetism", "Organic Chemistry", "Inorganic Chemistry",
+            "Analytical Chemistry", "Physical Chemistry", "Toxicology", "Pharmacology", "Immunology", "Virology",
+            "Bacteriology", "Mycology", "Parasitology", "Epidemiology", "Pathology", "Radiology", "Oncology", "Cardiology",
+            "Dermatology", "Neurology", "Psychiatry", "Endocrinology", "Hematology", "Nephrology", "Gastroenterology", "Pulmonology",
+            "Rhinology", "Ophthalmology", "Otology", "Urology", "Gynecology", "Obstetrics", "Pediatrics", "Geriatrics",
+            "Embryology", "Histology", "Cytology", "Molecular Biology", "Ethology", "Entomology", "Ornithology", "Ichthyology",
+            "Herpetology", "Mammalogy", "Primatology", "Marine Biology", "Limnology", "Hydrology", "Seismology", "Volcanology",
+            "Mineralogy", "Petrology", "Paleontology", "Stratigraphy", "Climatology", "Glaciology", "Speleology", "Dendrochronology"
+          ],
+
+          "Colors": [
+            "Red", "Blue", "Green", "Yellow", "Orange", "Purple", "Pink", "Brown",
+            "Black", "White", "Gray", "Cyan", "Magenta", "Turquoise", "Violet", "Indigo",
+            "Crimson", "Scarlet", "Maroon", "Burgundy", "Navy", "Teal", "Aqua", "Lime",
+            "Olive", "Chartreuse", "Amber", "Gold", "Silver", "Bronze", "Copper", "Brass",
+            "Beige", "Tan", "Khaki", "Cream", "Ivory", "Pearl", "Lavender", "Lilac",
+            "Mauve", "Plum", "Coral", "Salmon", "Peach", "Apricot", "Rust", "Sienna",
+            "Umber", "Ochre", "Sepia", "Taupe", "Slate", "Charcoal", "Ebony", "Jet",
+            "Vermilion", "Cerise", "Fuchsia", "Periwinkle", "Mint", "Sage", "Emerald", "Sapphire"
+          ],
+
+          "Months and Days": [
+            "January", "February", "March", "April", "May", "June", "July", "August",
+            "September", "October", "November", "December", "Monday", "Tuesday", "Wednesday", "Thursday",
+            "Friday", "Saturday", "Sunday", "Spring", "Summer", "Autumn", "Winter", "Fall",
+            "Solstice", "Equinox", "Dawn", "Sunrise", "Morning", "Noon", "Afternoon", "Evening",
+            "Dusk", "Sunset", "Twilight", "Night", "Midnight", "Yesterday", "Today", "Tomorrow",
+            "Week", "Fortnight", "Month", "Year", "Decade", "Century", "Millennium", "Era",
+            "Epoch", "Season", "Quarter", "Semester", "Trimester", "Weekend", "Weekday", "Holiday"
+          ],
+
+          "Body Parts": [
+            "Head", "Brain", "Eye", "Ear", "Nose", "Mouth", "Tongue", "Teeth",
+            "Neck", "Throat", "Shoulder", "Arm", "Elbow", "Wrist", "Hand", "Finger",
+            "Thumb", "Chest", "Heart", "Lung", "Stomach", "Liver", "Kidney", "Spleen",
+            "Back", "Spine", "Hip", "Leg", "Knee", "Ankle", "Foot", "Toe",
+            "Skin", "Hair", "Nail", "Blood", "Vein", "Artery", "Muscle", "Tendon",
+            "Ligament", "Joint", "Cartilage", "Nerve", "Gland", "Bladder", "Intestine", "Esophagus",
+            "Pancreas", "Gallbladder", "Appendix", "Tonsils", "Thyroid", "Rib", "Jaw", "Skull"
+          ],
+
+          "School Subjects": [
+            "Mathematics", "Algebra", "Geometry", "Calculus", "Statistics", "Trigonometry", "Physics", "Chemistry",
+            "Biology", "Anatomy", "Physiology", "Botany", "Zoology", "Geology", "Astronomy", "Meteorology",
+            "English", "Literature", "Grammar", "Composition", "Reading", "Writing", "Spelling", "Vocabulary",
+            "History", "Geography", "Civics", "Economics", "Government", "Psychology", "Sociology", "Anthropology",
+            "Art", "Music", "Drama", "Dance", "Physical Education", "Health", "Home Economics", "Shop",
+            "Computer Science", "Programming", "Typing", "Business", "Accounting", "Marketing", "Journalism", "Debate",
+            "Foreign Language", "Spanish", "French", "German", "Latin", "Philosophy", "Ethics", "Logic"
+          ],
+
+          "Household Rooms": [
+            "Kitchen", "Bedroom", "Bathroom", "Living Room", "Dining Room", "Family Room", "Den", "Office",
+            "Study", "Library", "Playroom", "Nursery", "Laundry Room", "Mudroom", "Pantry", "Closet",
+            "Hallway", "Foyer", "Entryway", "Vestibule", "Attic", "Basement", "Cellar", "Garage",
+            "Workshop", "Studio", "Sunroom", "Conservatory", "Solarium", "Porch", "Patio", "Deck",
+            "Balcony", "Terrace", "Veranda", "Lanai", "Breezeway", "Loft", "Mezzanine", "Guest Room",
+            "Master Bedroom", "Walk-in Closet", "Powder Room", "Half Bath", "Utility Room", "Storage Room",
+            "Wine Cellar", "Home Theater", "Game Room", "Gym", "Sauna", "Spa", "Pool House", "Cabana"
+          ],
+
+          "Types of Books": [
+            "Fiction", "Nonfiction", "Novel", "Novella", "Short Story", "Biography", "Autobiography", "Memoir",
+            "History", "Science", "Philosophy", "Religion", "Self-Help", "Cookbook", "Travel", "Guide",
+            "Dictionary", "Encyclopedia", "Atlas", "Almanac", "Textbook", "Manual", "Handbook", "Reference",
+            "Poetry", "Drama", "Essay", "Anthology", "Collection", "Mystery", "Thriller", "Horror",
+            "Romance", "Fantasy", "Science Fiction", "Western", "Historical Fiction", "Literary Fiction", "Young Adult", "Children's",
+            "Picture Book", "Comic Book", "Graphic Novel", "Manga", "Journal", "Diary", "Notebook", "Workbook",
+            "Art Book", "Coffee Table Book", "Photo Album", "Yearbook", "Catalog", "Magazine", "Periodical", "Newspaper"
+          ],
+
+          "Sports Equipment": [
+            "Ball", "Bat", "Racket", "Club", "Stick", "Puck", "Net", "Goal",
+            "Hoop", "Basket", "Glove", "Mitt", "Helmet", "Pads", "Cleats", "Shoes",
+            "Jersey", "Uniform", "Whistle", "Stopwatch", "Scoreboard", "Hurdle", "Vault", "Beam",
+            "Rings", "Bars", "Mat", "Trampoline", "Pommel Horse", "Parallel Bars", "Uneven Bars", "Balance Beam",
+            "Skis", "Snowboard", "Skates", "Skateboard", "Surfboard", "Paddleboard", "Kayak", "Canoe",
+            "Oar", "Paddle", "Sail", "Mast", "Rudder", "Anchor", "Rope", "Harness",
+            "Carabiner", "Chalk Bag", "Climbing Shoes", "Ice Axe", "Crampons", "Bicycle", "Scooter", "Rollerblades"
+          ],
+
+          "Jobs and Professions": [
+            "Doctor", "Nurse", "Dentist", "Pharmacist", "Veterinarian", "Therapist", "Psychologist", "Psychiatrist",
+            "Teacher", "Professor", "Principal", "Librarian", "Counselor", "Coach", "Tutor", "Educator",
+            "Lawyer", "Judge", "Paralegal", "Attorney", "Engineer", "Architect", "Surveyor", "Planner",
+            "Accountant", "Auditor", "Banker", "Broker", "Analyst", "Consultant", "Manager", "Executive",
+            "Chef", "Baker", "Butcher", "Barista", "Waiter", "Bartender", "Sommelier", "Host",
+            "Artist", "Musician", "Actor", "Dancer", "Singer", "Composer", "Conductor", "Director",
+            "Writer", "Author", "Journalist", "Editor", "Reporter", "Photographer", "Designer", "Illustrator",
+            "Programmer", "Developer", "Administrator", "Technician", "Mechanic", "Electrician", "Plumber", "Carpenter"
+          ],
+
+          "Modes of Transportation": [
+            "Car", "Truck", "Van", "Bus", "Taxi", "Limousine", "Motorcycle", "Scooter",
+            "Bicycle", "Tricycle", "Skateboard", "Rollerblades", "Segway", "Hoverboard", "Train", "Subway",
+            "Tram", "Trolley", "Monorail", "Cable Car", "Funicular", "Airplane", "Jet", "Helicopter",
+            "Blimp", "Balloon", "Glider", "Hang Glider", "Parachute", "Rocket", "Spaceship", "Shuttle",
+            "Boat", "Ship", "Yacht", "Sailboat", "Catamaran", "Kayak", "Canoe", "Raft",
+            "Ferry", "Cruise Ship", "Cargo Ship", "Tanker", "Submarine", "Hovercraft", "Jet Ski", "Gondola",
+            "Rickshaw", "Cart", "Wagon", "Carriage", "Stagecoach", "Sled", "Sleigh", "Snowmobile"
           ]
         };
 
@@ -73,30 +1167,229 @@
           const [items, setItems] = useState([]);
           const [selected, setSelected] = useState([]);
           const [won, setWon] = useState(false);
+          const [failedMerge, setFailedMerge] = useState(false);
+          const [mergeAnimation, setMergeAnimation] = useState(null); // { itemId, category, position }
+
+          // Color utilities
+          const hslToRgb = (h, s, l) => {
+            const c = (1 - Math.abs(2 * l - 1)) * s;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = l - c / 2;
+            let r, g, b;
+            
+            if (h < 60) { r = c; g = x; b = 0; }
+            else if (h < 120) { r = x; g = c; b = 0; }
+            else if (h < 180) { r = 0; g = c; b = x; }
+            else if (h < 240) { r = 0; g = x; b = c; }
+            else if (h < 300) { r = x; g = 0; b = c; }
+            else { r = c; g = 0; b = x; }
+            
+            return [
+              Math.round((r + m) * 255),
+              Math.round((g + m) * 255),
+              Math.round((b + m) * 255)
+            ];
+          };
+          
+          const rgbToHsl = (r, g, b) => {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const l = (max + min) / 2;
+            
+            if (max === min) return [0, 0, l];
+            
+            const d = max - min;
+            const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            
+            let h;
+            if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+            else if (max === g) h = ((b - r) / d + 2) * 60;
+            else h = ((r - g) / d + 4) * 60;
+            
+            return [h, s, l];
+          };
+          
+          const generateStartingColor = () => {
+            // Generate a pleasant pastel color
+            const hue = Math.random() * 360;
+            const saturation = 0.25; // Low saturation for white buttons
+            const lightness = 0.90; // Very light
+            return { h: hue, s: saturation, l: lightness };
+          };
+          
+          const mixColors = (color1, color2, mergeCount) => {
+            // Average the hues (accounting for circular nature)
+            let h1 = color1.h;
+            let h2 = color2.h;
+            
+            // Handle hue wrapping (shortest path around color wheel)
+            if (Math.abs(h1 - h2) > 180) {
+              if (h1 < h2) h1 += 360;
+              else h2 += 360;
+            }
+            
+            const avgHue = ((h1 + h2) / 2) % 360;
+            
+            // Average saturation and lightness
+            const avgSat = (color1.s + color2.s) / 2;
+            const avgLight = (color1.l + color2.l) / 2;
+            
+            // Gradually increase saturation based on merge count (2 to 45)
+            // Start at 0.25, max out at 0.35 for readability
+            const saturationBoost = Math.min(0.10, (mergeCount / 45) * 0.10);
+            const newSaturation = Math.min(0.35, avgSat + saturationBoost);
+            
+            // Slightly darken as items merge for better contrast
+            const lightnessAdjust = Math.min(0.05, (mergeCount / 45) * 0.05);
+            const newLightness = Math.max(0.85, avgLight - lightnessAdjust);
+            
+            return { h: avgHue, s: newSaturation, l: newLightness };
+          };
+          
+          const hslToString = (hsl) => {
+            if (!hsl) return 'white';
+            return `hsl(${hsl.h}, ${hsl.s * 100}%, ${hsl.l * 100}%)`;
+          };
+
+          // Validate categories on mount
+          useEffect(() => {
+            const invalidCategories = [];
+            for (const [name, items] of Object.entries(CATEGORIES)) {
+              if (items.length < 45) {
+                invalidCategories.push(`${name} (${items.length} items)`);
+              }
+            }
+            if (invalidCategories.length > 0) {
+              console.error('INVALID CATEGORIES DETECTED:');
+              invalidCategories.forEach(cat => console.error(`  - ${cat}`));
+              alert(`Game cannot start: ${invalidCategories.length} categories have < 45 items. Check console for details.`);
+            }
+          }, []);
 
           const initializeGame = () => {
             const categoryNames = Object.keys(CATEGORIES);
-            const numCategories = Math.min(5, categoryNames.length);
-            const shuffledCategories = [...categoryNames].sort(() => Math.random() - 0.5);
-            const selectedCategories = shuffledCategories.slice(0, numCategories);
+            const TARGET_CATEGORIES = 45;
+            const ITEMS_PER_CATEGORY = 45;
+            const TARGET_TOTAL_ITEMS = TARGET_CATEGORIES * ITEMS_PER_CATEGORY; // 2025
             
-            const allItems = [];
-            selectedCategories.forEach(category => {
-              const categoryItems = CATEGORIES[category];
-              const shuffled = [...categoryItems].sort(() => Math.random() - 0.5);
-              const selected = shuffled.slice(0, 45);
+            console.log(`\n=== INITIALIZING GAME ===`);
+            console.log(`Total available categories: ${categoryNames.length}`);
+            
+            // Retry logic - keep trying until we get exactly 2025 items
+            let attempts = 0;
+            const maxAttempts = 10;
+            let finalItems = [];
+            
+            while (attempts < maxAttempts) {
+              attempts++;
+              console.log(`\n--- Attempt ${attempts} ---`);
               
-              selected.forEach(item => {
-                allItems.push({
-                  id: Math.random().toString(36).substr(2, 9),
-                  category,
-                  items: [item],
-                  displayText: item
+              // Shuffle categories
+              const shuffledCategories = [...categoryNames].sort(() => Math.random() - 0.5);
+              
+              // Select categories while respecting mutual exclusions
+              const selectedCategories = [];
+              const usedGroups = new Set();
+              
+              for (const category of shuffledCategories) {
+                if (selectedCategories.length >= TARGET_CATEGORIES) break;
+                
+                // Check if this category has enough items (need buffer for duplicates)
+                if (!CATEGORIES[category] || CATEGORIES[category].length < 50) {
+                  console.warn(`Category "${category}" skipped - only has ${CATEGORIES[category]?.length || 0} items`);
+                  continue;
+                }
+                
+                // Check if this category is in a mutually exclusive group
+                let groupKey = null;
+                for (const [key, categories] of Object.entries(MUTUALLY_EXCLUSIVE_GROUPS)) {
+                  if (categories.includes(category)) {
+                    groupKey = key;
+                    break;
+                  }
+                }
+                
+                // If it's in a group that we've already used, skip it
+                if (groupKey && usedGroups.has(groupKey)) {
+                  continue;
+                }
+                
+                // Add this category and mark its group as used
+                selectedCategories.push(category);
+                if (groupKey) {
+                  usedGroups.add(groupKey);
+                }
+              }
+              
+              console.log(`Selected ${selectedCategories.length} categories`);
+              
+              // Sort selected categories by size (smallest first) to maximize success
+              // This way, small categories with many duplicates get first pick of items
+              const sortedBySize = selectedCategories.sort((a, b) => {
+                return CATEGORIES[a].length - CATEGORIES[b].length;
+              });
+              
+              console.log(`Processing categories from smallest to largest...`);
+              
+              const allItems = [];
+              const usedItems = new Set(); // Track items globally to prevent duplicates
+              const categoryResults = [];
+              
+              sortedBySize.forEach(category => {
+                const categoryItems = CATEGORIES[category];
+                const shuffled = [...categoryItems].sort(() => Math.random() - 0.5);
+                
+                // Select items, skipping any that have already been used
+                const selected = [];
+                for (const item of shuffled) {
+                  if (!usedItems.has(item)) {
+                    selected.push(item);
+                    usedItems.add(item);
+                    
+                    if (selected.length >= ITEMS_PER_CATEGORY) {
+                      break;
+                    }
+                  }
+                }
+                
+                categoryResults.push({ category, count: selected.length });
+                
+                // Add whatever we got (even if less than 45)
+                selected.forEach(item => {
+                  allItems.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    category,
+                    items: [item],
+                    displayText: item,
+                    color: null // Start with no color (white)
+                  });
                 });
               });
-            });
+              
+              // Check if we hit the target
+              if (allItems.length === TARGET_TOTAL_ITEMS) {
+                console.log(`\n✅ SUCCESS! Got exactly ${TARGET_TOTAL_ITEMS} items on attempt ${attempts}`);
+                finalItems = allItems;
+                break;
+              } else {
+                console.warn(`Attempt ${attempts}: Got ${allItems.length} items, need ${TARGET_TOTAL_ITEMS}. Retrying...`);
+                
+                // Show which categories fell short
+                const shortCategories = categoryResults.filter(c => c.count < ITEMS_PER_CATEGORY);
+                if (shortCategories.length > 0) {
+                  console.warn(`Categories that didn't yield 45 items:`);
+                  shortCategories.forEach(c => console.warn(`  - ${c.category}: ${c.count}/45 items`));
+                }
+              }
+            }
             
-            const shuffledItems = allItems.sort(() => Math.random() - 0.5);
+            if (finalItems.length !== TARGET_TOTAL_ITEMS) {
+              console.error(`\n❌ FAILED to get ${TARGET_TOTAL_ITEMS} items after ${maxAttempts} attempts. Got ${finalItems.length} items.`);
+              console.error(`The game will proceed but may not have exactly 2025 items.`);
+            }
+            
+            const shuffledItems = (finalItems.length > 0 ? finalItems : []).sort(() => Math.random() - 0.5);
             setItems(shuffledItems);
             setSelected([]);
             setWon(false);
@@ -122,6 +1415,12 @@
               }
             }
           };
+          
+          const reshuffleLayout = () => {
+            const shuffled = [...items].sort(() => Math.random() - 0.5);
+            setItems(shuffled);
+            setSelected([]); // Clear selection when reshuffling
+          };
 
           const attemptMerge = (selectedIds) => {
             const [id1, id2] = selectedIds;
@@ -134,35 +1433,80 @@
                 ? mergedItems.join(", ")
                 : `${mergedItems.slice(0, 3).join(", ")}... [${mergedItems.length}]`;
               
+              // Mix colors
+              let newColor;
+              if (!item1.color && !item2.color) {
+                // Both white - generate starting color
+                newColor = generateStartingColor();
+              } else if (!item1.color) {
+                // One white, one colored - use the colored one with slight adjustment
+                newColor = item2.color;
+              } else if (!item2.color) {
+                newColor = item1.color;
+              } else {
+                // Both colored - mix them
+                newColor = mixColors(item1.color, item2.color, mergedItems.length);
+              }
+              
               const newItem = {
                 id: Math.random().toString(36).substr(2, 9),
                 category: item1.category,
                 items: mergedItems,
-                displayText
+                displayText,
+                color: newColor
               };
               
-              const newItems = items
-                .filter(i => i.id !== id1 && i.id !== id2)
-                .concat(newItem);
+              // Find the index of the second selected item
+              const id2Index = items.findIndex(i => i.id === id2);
+              
+              // Build new array: keep items before id2, insert merged item, skip both selected items
+              const newItems = [];
+              items.forEach((item, index) => {
+                if (item.id === id1 || item.id === id2) {
+                  // Skip the selected items
+                  if (index === id2Index) {
+                    // At position of second item, insert the merged item
+                    newItems.push(newItem);
+                  }
+                } else {
+                  newItems.push(item);
+                }
+              });
               
               setItems(newItems);
               setSelected([]);
+              
+              // Trigger animation AFTER DOM updates with new items
+              setTimeout(() => {
+                const mergedElement = document.querySelector(`[data-item-id="${newItem.id}"]`);
+                if (mergedElement) {
+                  const rect = mergedElement.getBoundingClientRect();
+                  setMergeAnimation({
+                    category: item1.category,
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                  });
+                  
+                  // Add scale pulse to the merged item
+                  mergedElement.classList.add('scale-pulse');
+                  setTimeout(() => mergedElement.classList.remove('scale-pulse'), 300);
+                  
+                  // Clear animation after 600ms
+                  setTimeout(() => setMergeAnimation(null), 600);
+                }
+              }, 0);
               
               if (newItems.every(item => item.items.length === 45)) {
                 setWon(true);
               }
             } else {
-              setSelected([]);
+              // Merge failed - show feedback
+              setFailedMerge(true);
+              setTimeout(() => {
+                setFailedMerge(false);
+                setSelected([]);
+              }, 300);
             }
-          };
-
-          const getGridColumns = () => {
-            const totalItems = items.length;
-            if (totalItems <= 25) return 5;
-            if (totalItems <= 64) return 8;
-            if (totalItems <= 100) return 10;
-            if (totalItems <= 144) return 12;
-            return 15;
           };
 
           return (
@@ -173,12 +1517,20 @@
                   <p className="text-gray-600 mb-4">
                     Select two items from the same category to merge them. Win by creating piles of 45!
                   </p>
-                  <button
-                    onClick={initializeGame}
-                    className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
-                  >
-                    🔄 New Game
-                  </button>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={initializeGame}
+                      className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                      🔄 New Game
+                    </button>
+                    <button
+                      onClick={reshuffleLayout}
+                      className="inline-flex items-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      🔀 Reshuffle Layout
+                    </button>
+                  </div>
                 </div>
 
                 {won && (
@@ -193,32 +1545,58 @@
                     Items remaining: {items.length} | Selected: {selected.length}/2
                   </div>
                   
-                  <div 
-                    className="grid gap-2"
-                    style={{
-                      gridTemplateColumns: `repeat(${getGridColumns()}, minmax(0, 1fr))`
-                    }}
-                  >
+                  <div className="flex flex-wrap gap-2 justify-center">
                     {items.map(item => (
                       <button
                         key={item.id}
+                        data-item-id={item.id}
                         onClick={() => toggleSelect(item.id)}
+                        style={{
+                          backgroundColor: selected.includes(item.id) 
+                            ? '#e0e7ff' // indigo-100 when selected
+                            : hslToString(item.color)
+                        }}
                         className={`
-                          p-3 rounded-lg border-2 transition-all text-sm font-medium
+                          px-4 py-2 rounded-lg border-2 transition-all font-medium text-sm
                           ${selected.includes(item.id) 
-                            ? 'border-indigo-500 bg-indigo-100 shadow-md scale-105' 
-                            : 'border-gray-300 bg-white hover:border-indigo-300 hover:shadow'
+                            ? 'border-indigo-500 shadow-md scale-105' 
+                            : 'border-gray-300 hover:border-indigo-300 hover:shadow'
                           }
-                          ${item.items.length > 1 ? 'bg-gradient-to-br from-purple-50 to-pink-50' : ''}
+                          ${failedMerge && selected.includes(item.id) ? 'shake flash-red' : ''}
                         `}
                       >
-                        <div className="break-words text-center">
+                        <div className="text-center whitespace-nowrap">
                           {item.displayText}
                         </div>
                       </button>
                     ))}
                   </div>
                 </div>
+                
+                {/* Merge Animation */}
+                {mergeAnimation && (
+                  <>
+                    {/* Sparkle stars in corners */}
+                    {[
+                      { x: -25, y: -25 },
+                      { x: 25, y: -25 },
+                      { x: -25, y: 25 },
+                      { x: 25, y: 25 },
+                    ].map((pos, i) => (
+                      <div
+                        key={i}
+                        className="sparkle"
+                        style={{
+                          left: `${mergeAnimation.x + pos.x}px`,
+                          top: `${mergeAnimation.y + pos.y}px`,
+                          animationDelay: `${i * 0.1}s`
+                        }}
+                      >
+                        ✨
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           );
