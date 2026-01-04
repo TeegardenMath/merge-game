@@ -145,23 +145,9 @@
         };
 
         const MergeGame = () => {
+          // ALL HOOKS MUST BE AT THE TOP (React Rules of Hooks)
           // Load categories from external file
           const [CATEGORIES, setCATEGORIES] = React.useState(null);
-          
-          React.useEffect(() => {
-            fetch('categories.json')
-              .then(response => response.json())
-              .then(data => setCATEGORIES(data))
-              .catch(error => console.error('Error loading categories:', error));
-          }, []);
-          
-          // Wait for categories to load
-          if (!CATEGORIES) {
-            return <div className="flex items-center justify-center min-h-screen">
-              <div className="text-xl">Loading categories...</div>
-            </div>;
-          }
-          
           const [items, setItems] = useState([]);
           const [selected, setSelected] = useState([]);
           const [won, setWon] = useState(false);
@@ -170,6 +156,20 @@
           const [isDailyPuzzle, setIsDailyPuzzle] = useState(true);
           const [randomPuzzleSize, setRandomPuzzleSize] = useState(45); // For random puzzles only
           const [currentPuzzleSize, setCurrentPuzzleSize] = useState(45); // Track active puzzle size
+          
+          React.useEffect(() => {
+            fetch('categories.json')
+              .then(response => response.json())
+              .then(data => setCATEGORIES(data))
+              .catch(error => console.error('Error loading categories:', error));
+          }, []);
+          
+          // Wait for categories to load (AFTER all hooks are declared)
+          if (!CATEGORIES) {
+            return <div className="flex items-center justify-center min-h-screen">
+              <div className="text-xl">Loading categories...</div>
+            </div>;
+          }
           
           // localStorage utilities (better than cookies for this use case)
           const saveGameState = (state) => {
