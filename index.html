@@ -52,6 +52,58 @@
             50% { transform: scale(1.05); }
         }
         
+        @keyframes completed-pulse {
+            0% { 
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            }
+            50% { 
+                transform: scale(1.08);
+                box-shadow: 0 0 0 12px rgba(34, 197, 94, 0);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+            }
+        }
+        
+        @keyframes shine-sweep {
+            0% { 
+                background-position: -200% center;
+            }
+            100% { 
+                background-position: 200% center;
+            }
+        }
+        
+        .completed-category {
+            position: relative;
+            border: 3px solid #22c55e !important;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3), inset 0 1px 3px rgba(255, 255, 255, 0.5) !important;
+            animation: completed-pulse 0.6s ease-out;
+        }
+        
+        .completed-category::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                120deg,
+                transparent 0%,
+                transparent 40%,
+                rgba(255, 255, 255, 0.5) 50%,
+                transparent 60%,
+                transparent 100%
+            );
+            background-size: 200% 100%;
+            border-radius: inherit;
+            pointer-events: none;
+            animation: shine-sweep 2s ease-in-out;
+        }
+        
         .particle {
             position: fixed;
             width: 8px;
@@ -1263,10 +1315,10 @@
           };
           
           const generateStartingColor = () => {
-            // Generate a pleasant pastel color
+            // Generate a very pale pastel color for initial merges
             const hue = Math.random() * 360;
-            const saturation = 0.25; // Low saturation for white buttons
-            const lightness = 0.90; // Very light
+            const saturation = 0.15; // Very low saturation - barely colored
+            const lightness = 0.95; // Very light - almost white
             return { h: hue, s: saturation, l: lightness };
           };
           
@@ -1287,14 +1339,16 @@
             const avgSat = (color1.s + color2.s) / 2;
             const avgLight = (color1.l + color2.l) / 2;
             
-            // Gradually increase saturation based on merge count (2 to 45)
-            // Start at 0.25, max out at 0.35 for readability
-            const saturationBoost = Math.min(0.10, (mergeCount / 45) * 0.10);
-            const newSaturation = Math.min(0.35, avgSat + saturationBoost);
+            // Gradually increase saturation based on merge count relative to puzzle size
+            // Use square root to make changes more visible early on
+            // Start at 0.15, max out at 0.60 for vivid but still readable colors
+            const progress = Math.sqrt(mergeCount / currentPuzzleSize); // Use actual puzzle size!
+            const saturationBoost = progress * 0.45; // 0 to 0.45 boost (0.15 → 0.60)
+            const newSaturation = Math.min(0.60, avgSat + saturationBoost);
             
-            // Slightly darken as items merge for better contrast
-            const lightnessAdjust = Math.min(0.05, (mergeCount / 45) * 0.05);
-            const newLightness = Math.max(0.85, avgLight - lightnessAdjust);
+            // Darken significantly as items merge for better contrast
+            const lightnessAdjust = progress * 0.20; // Aggressive darkening (0.95 → 0.75)
+            const newLightness = Math.max(0.75, avgLight - lightnessAdjust);
             
             return { h: avgHue, s: newSaturation, l: newLightness };
           };
@@ -1566,11 +1620,20 @@
               if (!item1.color && !item2.color) {
                 // Both white - generate starting color
                 newColor = generateStartingColor();
-              } else if (!item1.color) {
-                // One white, one colored - use the colored one with slight adjustment
-                newColor = item2.color;
-              } else if (!item2.color) {
-                newColor = item1.color;
+              } else if (!item1.color || !item2.color) {
+                // One white, one colored - boost the colored one based on new merge count
+                const coloredItem = item1.color || item2.color;
+                const progress = Math.sqrt(mergedItems.length / currentPuzzleSize);
+                const saturationBoost = progress * 0.45;
+                const newSaturation = Math.min(0.60, 0.15 + saturationBoost);
+                const lightnessAdjust = progress * 0.20;
+                const newLightness = Math.max(0.75, 0.95 - lightnessAdjust);
+                
+                newColor = {
+                  h: coloredItem.h,
+                  s: newSaturation,
+                  l: newLightness
+                };
               } else {
                 // Both colored - mix them
                 newColor = mixColors(item1.color, item2.color, mergedItems.length);
@@ -1710,30 +1773,37 @@
                   </div>
                   
                   <div className="flex flex-wrap gap-2 justify-center">
-                    {items.map(item => (
-                      <button
-                        key={item.id}
-                        data-item-id={item.id}
-                        onClick={() => toggleSelect(item.id)}
-                        style={{
-                          backgroundColor: selected.includes(item.id) 
-                            ? '#e0e7ff' // indigo-100 when selected
-                            : hslToString(item.color)
-                        }}
-                        className={`
-                          px-4 py-2 rounded-lg border-2 transition-all font-medium text-sm
-                          ${selected.includes(item.id) 
-                            ? 'border-indigo-500 shadow-md scale-105' 
-                            : 'border-gray-300 hover:border-indigo-300 hover:shadow'
-                          }
-                          ${failedMerge && selected.includes(item.id) ? 'shake flash-red' : ''}
-                        `}
-                      >
-                        <div className="text-center whitespace-nowrap">
-                          {item.displayText}
-                        </div>
-                      </button>
-                    ))}
+                    {items.map(item => {
+                      const isCompleted = item.items.length === currentPuzzleSize;
+                      
+                      return (
+                        <button
+                          key={item.id}
+                          data-item-id={item.id}
+                          onClick={() => toggleSelect(item.id)}
+                          style={{
+                            backgroundColor: selected.includes(item.id) 
+                              ? '#e0e7ff' // indigo-100 when selected
+                              : hslToString(item.color)
+                          }}
+                          className={`
+                            px-4 py-2 rounded-lg border-2 transition-all font-medium text-sm
+                            ${isCompleted ? 'completed-category' : ''}
+                            ${selected.includes(item.id) 
+                              ? 'border-indigo-500 shadow-md scale-105' 
+                              : isCompleted
+                                ? '' // Border handled by completed-category class
+                                : 'border-gray-300 hover:border-indigo-300 hover:shadow'
+                            }
+                            ${failedMerge && selected.includes(item.id) ? 'shake flash-red' : ''}
+                          `}
+                        >
+                          <div className="text-center whitespace-nowrap">
+                            {isCompleted && '✓ '}{item.displayText}{isCompleted && ' ✓'}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 
